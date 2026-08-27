@@ -82,12 +82,12 @@ with aba1:
 
     if st.button("🚀 Processar Análise", type="primary"):
         if user_input.strip():
-            with st.spinner("Processando diagnóstico detalhado..."):
+            with st.spinner("Processando diagnóstico detalhado (aguarde caso haja fila de cota)..."):
                 resposta_obtida = None
                 sucesso = False
                 
-                # Lista de modelos para tentativa de fallback caso o principal atinja cota
-                modelos_para_tentar = ["gemini-3.6-flash", "gemini-1.5-flash"]
+                # Lista expandida com múltiplos fallbacks (do mais recente para versões anteriores mais estáveis de cota)
+                modelos_para_tentar = ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
                 
                 prompt = f"""
                 Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE, com foco em uma linguagem simples, clara e didática.
@@ -114,22 +114,27 @@ with aba1:
                 {user_input}
                 """
                 
+                # Loop de tentativa com fallback e pausa inteligente (backoff)
                 for nome_modelo in modelos_para_tentar:
-                    try:
-                        model = genai.GenerativeModel(nome_modelo)
-                        response = model.generate_content(prompt, generation_config={"temperature": 0.2, "max_output_tokens": 4096})
-                        if response and response.text:
-                            resposta_obtida = response.text
-                            sucesso = True
-                            break
-                    except Exception as err:
-                        # Se for erro de cota (429), aguarda brevemente e tenta o próximo modelo da lista
-                        if "429" in str(err) or "quota" in str(err).lower():
-                            time.sleep(2)
-                            continue
-                        else:
-                            # Outros erros prosseguem para exibição
-                            pass
+                    tentativas = 2  # Tenta até 2 vezes por modelo com intervalo
+                    for tentativa in range(tentativas):
+                        try:
+                            model = genai.GenerativeModel(nome_modelo)
+                            response = model.generate_content(prompt, generation_config={"temperature": 0.2, "max_output_tokens": 4096})
+                            if response and response.text:
+                                resposta_obtida = response.text
+                                sucesso = True
+                                break
+                        except Exception as err:
+                            erro_str = str(err).lower()
+                            # Se estourou cota (429 / quota), aguarda alguns segundos e tenta novamente
+                            if "429" in erro_str or "quota" in erro_str:
+                                time.sleep(3 * (tentativa + 1))  # Pausa progressiva (3s, depois 6s)
+                                continue
+                            else:
+                                break  # Outros erros pulam para o próximo modelo
+                    if sucesso:
+                        break
 
                 if sucesso and resposta_obtida:
                     st.markdown("---")
@@ -137,7 +142,8 @@ with aba1:
                     st.markdown("### 💡 Diagnóstico e Orientação Detalhada")
                     st.markdown(resposta_obtida)
                 else:
-                    st.warning("⚠️ O limite de requisições gratuitas foi atingido temporariamente (Erro 429). Por favor, aguarde de 10 a 20 segundos e clique em 'Processar Análise' novamente.")
+                    st.error("⚠️ O limite de requisições gratuitas da API foi atingido (Erro 429). O sistema tentou modelos alternativos, mas todos retornaram sobrecarga momentânea.")
+                    st.info("💡 **Dica:** Aguarde aproximadamente 30 segundos antes de tentar processar um novo log novamente.")
         else:
             st.warning("⚠️ Por favor, insira ou carregue um texto de erro antes de processar a análise.")
 
