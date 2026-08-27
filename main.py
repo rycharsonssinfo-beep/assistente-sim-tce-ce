@@ -36,7 +36,7 @@ st.title("⚖️ Assistente SIM TCE-CE - Diagnóstico Técnico")
 st.markdown("### Central de análise e correção de erros de validação do Tribunal de Contas.")
 st.markdown("---")
 
-# Abas principais (Simplificado para 2 abas focadas em diagnóstico e referências)
+# Abas principais
 aba1, aba2 = st.tabs(["🔍 Diagnóstico de Logs e Posições", "💡 Padrões e Referências"])
 
 with aba1:
@@ -123,23 +123,62 @@ with aba1:
             st.warning("⚠️ Por favor, insira ou carregue um texto de erro antes de processar a análise.")
 
 with aba2:
-    st.subheader("📚 Guia Prático com Base em Relatórios de Ocorrência")
-    st.markdown("Consulte abaixo as orientações estruturadas para os erros mais frequentes identificados nas remessas mensais.")
+    st.subheader("📚 Guia Prático e Base de Conhecimento SIM 2026")
+    st.markdown("Consulte abaixo o catálogo detalhado com os erros mais frequentes, a função dos campos técnicos envolvidos e o passo a passo para a correção.")
 
-    with st.expander("🔗 1. Integridade Referencial (Chaves Estrangeiras em Veículos e Bens)"):
+    # Categoria 1: Orçamento e Unidades Gestoras
+    with st.expander("🏛️ 1. Erros de Unidades Orçamentárias e Vínculos (Ex: .VCL, .PAT)"):
         st.markdown("""
-        * **Ocorrência Comum:** Erros nos arquivos `.VCL` (Veículos) ou `.PAT` (Patrimônio) indicando que não há relação com os campos de UO ou Notas de Empenho.
-        * **Como corrigir:** Verifique se o Órgão (`cd_orgao`) e a Unidade Orçamentária (`cd_unid_orc`) em questão estão cadastrados e ativos para o período de referência exigido pelo TCE-CE. Confirme se a Data da Versão do Orçamento (`dt_versao_orc`) cadastrada corresponde exatamente à data enviada na carga orçamentária vigente.
+        * **Ocorrência Comum no Log:**  
+          *Não há relação com o(s) campo(s) (cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS.*
+        
+        * **O que significam os campos envolvidos?**
+          * `cd_municipio`: Código oficial do município regulado pelo IBGE.
+          * `dt_versao_orc`: Data da versão do orçamento vigente que foi enviada. Ela precisa ser idêntica à cadastrada na LOA/PPA.
+          * `cd_orgao` e `cd_unid_orc`: Código do Órgão e da Unidade Orçamentária responsáveis pela despesa ou bem.
+        
+        * **Como corrigir de forma simples:**
+          1. Certifique-se de que a carga dos arquivos orçamentários básicos foi enviada e aprovada **antes** de enviar os dados de veículos, patrimônio ou almoxarifado.
+          2. Confira se a data da versão do orçamento informada no sistema contábil bate exatamente com a remessa oficial da LOA.
         """)
 
-    with st.expander("📝 2. Cadastros Prévios Obrigatórios (Contratos e Gestores)"):
+    # Categoria 2: Contratos e Gestores
+    with st.expander("📝 2. Erros em Contratos, Aditivos e Ordenadores (Ex: .LCO)"):
         st.markdown("""
-        * **Ocorrência Comum:** Avisos de *Contrato Aditivo sem Contrato Original cadastrado* ou *Gestor responsável não encontrado no cadastro de Ordenadores*.
-        * **Como corrigir:** Certifique-se de que o contrato original foi devidamente exportado e validado nas remessas correspondentes antes do envio de aditivos. Valide também se o CPF do ordenador de despesa consta formalmente na remessa de agentes públicos da respectiva competência.
+        * **Ocorrência Comum no Log:**  
+          *Gestor responsável pelo Contrato não encontrado no cadastro de Ordenadores* ou *Aditivo sem Contrato Original vinculado*.
+        
+        * **O que significam os campos envolvidos?**
+          * `nu_contrato` / `aa_contrato`: Número e ano do contrato original.
+          * `cpf_responsavel` / `cd_ordenador`: Identificação do gestor ou ordenador de despesas autorizado.
+
+        * **Como corrigir de forma simples:**
+          1. **Para o contrato:** O contrato original deve constar obrigatoriamente na remessa da competência correta antes que qualquer termo aditivo seja transmitido.
+          2. **Para o gestor:** O CPF do ordenador de despesa deve estar ativo e devidamente informado na remessa de agentes públicos/responsáveis daquele respectivo mês.
         """)
 
-    with st.expander("🔄 3. Duplicidade de Registros no Banco"):
+    # Categoria 3: Folha de Pagamento e Pessoal
+    with st.expander("👥 3. Inconsistências na Folha de Pagamento e Servidores"):
         st.markdown("""
-        * **Ocorrência Comum:** Alerta informando que o registro já existe no banco de dados do validador (comum em arquivos de manutenção de veículos ou contas bancárias).
-        * **How to fix / Como corrigir:** Revise os arquivos de remessa mensal para eliminar lançamentos duplicados ou reenvios indevidos de registros que já foram aceitos em processamentos anteriores.
+        * **Ocorrência Comum no Log:**  
+          *Divergência ou ausência de vínculo empregatício para o CPF informado no arquivo de remessa de pessoal.*
+
+        * **O que significam os campos envolvidos?**
+          * `nu_cpf`: CPF do servidor ou agente público.
+          * `cd_cargo` / `nu_matricula`: Identificação funcional na estrutura de cargos da prefeitura ou câmara.
+
+        * **Como corrigir de forma simples:**
+          1. Verifique se o servidor foi cadastrado no arquivo de servidores ativos/inativos antes de receber lançamentos de pagamento (folha).
+          2. Confirme se houve alteração de cargo ou regime jurídico não atualizada no sistema de origem.
+        """)
+
+    # Categoria 4: Dicas Gerais de Envio e Posições
+    with st.expander("📌 4. Guia Rápido: Como Ler os Campos nas Linhas dos Arquivos"):
+        st.markdown("""
+        Se precisar analisar um arquivo texto (`.dat` ou `.txt`) linha por linha, lembre-se de que os dados são separados por **vírgulas e entre aspas**:
+        * **Primeiras colunas:** Geralmente identificam o código do órgão e o tipo de registro/layout.
+        * **Colunas centrais:** Costumam abrigar datas (no formato `AAAAMMDD`) e chaves principais (CPFs, CNPJs ou números de processos).
+        * **Últimas colunas:** Geralmente trazem valores numéricos e a competência de referência (no formato `AAAAMM`).
+        
+        *Dica de Ouro:* Sempre que o PGI emitir um relatório de ocorrência apontando uma linha, verifique a chave principal (geralmente a coluna de identificação) para localizar rapidamente o registro duplicado ou incorreto no sistema contábil.
         """)
