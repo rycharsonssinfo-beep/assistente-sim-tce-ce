@@ -94,18 +94,20 @@ with aba1:
                 try:
                     model = genai.GenerativeModel("gemini-3.6-flash")
                     
+                    # Prompt ajustado para focar em linguagem didática e proibir nomes fictícios de módulos de ERP
                     prompt = f"""
                     Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE.
                     Analise o erro de validação de dados abaixo (retirado de relatórios oficiais de ocorrência). 
                     Forneça um diagnóstico estruturado estritamente em duas partes claras:
                     
                     ### Causa Raiz
-                    (Explique detalhadamente o motivo da inconsistência de layout, chave estrangeira ou cadastro ausente).
+                    (Explique detalhadamente o motivo da inconsistência de layout, chave estrangeira ou cadastro ausente, citando os campos técnicos envolvidos de forma clara).
 
-                    ### Passo a Passo Normativo
-                    (Forneça o procedimento objetivo de como corrigir diretamente nos lançamentos ou telas do sistema ERP).
+                    ### Diretrizes de Correção
+                    (Forneça orientações didáticas e normativas focadas estritamente na validação de dados, como por exemplo: verificar se o órgão, unidade orçamentária ou data de versão correspondem exatamente aos cadastros oficiais enviados ao TCE-CE).
 
-                    IMPORTANTE: 
+                    REGRAS OBRIGATÓRIAS:
+                    - NUNCA invente nomes de módulos ou telas de ERP (como "módulo de frotas", "transporte", etc.). Foque estritamente nos conceitos, campos e nas regras normativas do SIM TCE-CE.
                     - NÃO utilize scripts SQL, consultas de banco de dados ou comandos de alteração de banco.
                     - Certifique-se de concluir a resposta inteira sem cortes.
 
@@ -140,17 +142,17 @@ with aba2:
     with st.expander("🔗 1. Integridade Referencial (Chaves Estrangeiras em Veículos e Bens)"):
         st.markdown("""
         * **Ocorrência Comum:** Erros nos arquivos `.VCL` (Veículos) ou `.PAT` (Patrimônio) indicando que não há relação com os campos de UO ou Notas de Empenho.
-        * **Como corrigir:** Certifique-se de que os arquivos principais de cadastro (Unidades Orçamentárias, Órgãos e Notas de Empenho) foram gerados e enviados corretamente na mesma competência, e que os códigos informados no lançamento da frota/patrimônio correspondem exatamente aos cadastros vigentes.
+        * **Como corrigir:** Verifique se o Órgão (`cd_orgao`) e a Unidade Orçamentária (`cd_unid_orc`) em questão estão cadastrados e ativos para o período de referência exigido pelo TCE-CE. Confirme se a Data da Versão do Orçamento (`dt_versao_orc`) cadastrada corresponde exatamente à data enviada na carga orçamentária vigente.
         """)
 
     with st.expander("📝 2. Cadastros Prévios Obrigatórios (Contratos e Gestores)"):
         st.markdown("""
         * **Ocorrência Comum:** Avisos de *Contrato Aditivo sem Contrato Original cadastrado* ou *Gestor responsável não encontrado no cadastro de Ordenadores*.
-        * **Como corrigir:** No seu sistema de ERP, verifique se o contrato principal foi devidamente lançado antes do aditivo. No caso de gestores, valide se o CPF do ordenador consta na remessa de agentes públicos/gestores do período correspondente.
+        * **Como corrigir:** Certifique-se de que o contrato original foi devidamente exportado e validado nas remessas correspondentes antes do envio de aditivos. Valide também se o CPF do ordenador de despesa consta formalmente na remessa de agentes públicos da respectiva competência.
         """)
 
     with st.expander("🔄 3. Duplicidade de Registros no Banco"):
         st.markdown("""
         * **Ocorrência Comum:** Alerta informando que o registro já existe no banco de dados do validador (comum em arquivos de manutenção de veículos ou contas bancárias).
-        * **Como corrigir:** Remova os lançamentos duplicados na rotina de exportação do seu sistema de gestão para evitar o envio de registros repetidos na mesma remessa mensal.
+        * **Como corrigir:** Revise os arquivos de remessa mensal para eliminar lançamentos duplicados ou reenvios indevidos de registros que já foram aceitos em processamentos anteriores.
         """)
