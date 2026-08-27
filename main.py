@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import streamlit as st
 import google.generativeai as genai
 
@@ -82,43 +83,61 @@ with aba1:
     if st.button("🚀 Processar Análise", type="primary"):
         if user_input.strip():
             with st.spinner("Processando diagnóstico detalhado..."):
-                try:
-                    model = genai.GenerativeModel("gemini-3.6-flash")
-                    
-                    prompt = f"""
-                    Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE, com foco em uma linguagem simples, clara e didática.
-                    Analise o erro de validação de dados abaixo (retirado de relatórios oficiais de ocorrência). 
-                    
-                    Forneça um diagnóstico estruturado estritamente nas seguintes partes:
-                    
-                    ### 🎯 Causa Raiz em Linguagem Simples
-                    (Explique o motivo da inconsistência de forma descomplicada, traduzindo o que o erro significa na prática para o usuário).
+                resposta_obtida = None
+                sucesso = False
+                
+                # Lista de modelos para tentativa de fallback caso o principal atinja cota
+                modelos_para_tentar = ["gemini-3.6-flash", "gemini-1.5-flash"]
+                
+                prompt = f"""
+                Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE, com foco em uma linguagem simples, clara e didática.
+                Analise o erro de validação de dados abaixo (retirado de relatórios oficiais de ocorrência). 
+                
+                Forneça um diagnóstico estruturado estritamente nas seguintes partes:
+                
+                ### 🎯 Causa Raiz em Linguagem Simples
+                (Explique o motivo da inconsistência de forma descomplicada, traduzindo o que o erro significa na prática para o usuário).
 
-                    ### 📍 Onde Encontrar e O Que Significa Cada Campo
-                    (Identifique os campos técnicos citados no erro - como cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc, etc. Explique qual é a função de cada um deles no leiaute e em qual parte/contexto do arquivo eles devem ser conferidos).
+                ### 📍 Onde Encontrar e O Que Significa Cada Campo
+                (Identifique os campos técnicos citados no erro - como cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc, etc. Explique qual é a função de cada um deles no leiaute e em qual parte/contexto do arquivo eles devem ser conferidos).
 
-                    ### ✅ Diretrizes Práticas de Correção
-                    (Forneça orientações passo a passo claras e diretas de como o usuário deve proceder no sistema de origem ou no arquivo para resolver o problema).
+                ### ✅ Diretrizes Práticas de Correção
+                (Forneça orientações passo a passo claras e diretas de como o usuário deve proceder no sistema de origem ou no arquivo para resolver o problema).
 
-                    REGRAS OBRIGATÓRIAS:
-                    - Use uma linguagem amigável, didática e de fácil compreensão.
-                    - NUNCA invente nomes de módulos ou telas de ERP. 
-                    - NÃO utilize scripts SQL ou comandos de banco de dados.
-                    - Certifique-se de concluir a resposta inteira sem cortes.
+                REGRAS OBRIGATÓRIAS:
+                - Use uma linguagem amigável, didática e de fácil compreensão.
+                - NUNCA invente nomes de módulos ou telas de ERP. 
+                - NÃO utilize scripts SQL ou comandos de banco de dados.
+                - Certifique-se de concluir a resposta inteira sem cortes.
 
-                    Erro reportado:
-                    {user_input}
-                    """
-                    
-                    response = model.generate_content(prompt, generation_config={"temperature": 0.2, "max_output_tokens": 4096})
-                    
+                Erro reportado:
+                {user_input}
+                """
+                
+                for nome_modelo in modelos_para_tentar:
+                    try:
+                        model = genai.GenerativeModel(nome_modelo)
+                        response = model.generate_content(prompt, generation_config={"temperature": 0.2, "max_output_tokens": 4096})
+                        if response and response.text:
+                            resposta_obtida = response.text
+                            sucesso = True
+                            break
+                    except Exception as err:
+                        # Se for erro de cota (429), aguarda brevemente e tenta o próximo modelo da lista
+                        if "429" in str(err) or "quota" in str(err).lower():
+                            time.sleep(2)
+                            continue
+                        else:
+                            # Outros erros prosseguem para exibição
+                            pass
+
+                if sucesso and resposta_obtida:
                     st.markdown("---")
                     st.success("Análise concluída com sucesso!")
                     st.markdown("### 💡 Diagnóstico e Orientação Detalhada")
-                    st.markdown(response.text)
-                    
-                except Exception as e:
-                    st.error(f"Ocorreu um erro ao processar a requisição técnica: {e}")
+                    st.markdown(resposta_obtida)
+                else:
+                    st.warning("⚠️ O limite de requisições gratuitas foi atingido temporariamente (Erro 429). Por favor, aguarde de 10 a 20 segundos e clique em 'Processar Análise' novamente.")
         else:
             st.warning("⚠️ Por favor, insira ou carregue um texto de erro antes de processar a análise.")
 
@@ -126,7 +145,6 @@ with aba2:
     st.subheader("📚 Guia Prático e Base de Conhecimento SIM 2026")
     st.markdown("Consulte abaixo o catálogo detalhado com os erros mais frequentes, a função dos campos técnicos envolvidos e o passo a passo para a correção.")
 
-    # Categoria 1: Orçamento e Unidades Gestoras
     with st.expander("🏛️ 1. Erros de Unidades Orçamentárias e Vínculos (Ex: .VCL, .PAT)"):
         st.markdown("""
         * **Ocorrência Comum no Log:**  
@@ -142,7 +160,6 @@ with aba2:
           2. Confira se a data da versão do orçamento informada no sistema contábil bate exatamente com a remessa oficial da LOA.
         """)
 
-    # Categoria 2: Contratos e Gestores
     with st.expander("📝 2. Erros em Contratos, Aditivos e Ordenadores (Ex: .LCO)"):
         st.markdown("""
         * **Ocorrência Comum no Log:**  
@@ -157,7 +174,6 @@ with aba2:
           2. **Para o gestor:** O CPF do ordenador de despesa deve estar ativo e devidamente informado na remessa de agentes públicos/responsáveis daquele respectivo mês.
         """)
 
-    # Categoria 3: Folha de Pagamento e Pessoal
     with st.expander("👥 3. Inconsistências na Folha de Pagamento e Servidores"):
         st.markdown("""
         * **Ocorrência Comum no Log:**  
@@ -172,7 +188,6 @@ with aba2:
           2. Confirme se houve alteração de cargo ou regime jurídico não atualizada no sistema de origem.
         """)
 
-    # Categoria 4: Dicas Gerais de Envio e Posições
     with st.expander("📌 4. Guia Rápido: Como Ler os Campos nas Linhas dos Arquivos"):
         st.markdown("""
         Se precisar analisar um arquivo texto (`.dat` ou `.txt`) linha por linha, lembre-se de que os dados são separados por **vírgulas e entre aspas**:
