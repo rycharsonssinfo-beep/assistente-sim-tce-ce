@@ -9,7 +9,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Configuração da Chave da API do Gemini (Mantida em segundo plano sem exposição na UI)
+# Configuração da Chave da API do Gemini
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
 if not api_key:
@@ -18,7 +18,7 @@ else:
     genai.configure(api_key=api_key)
 
 # ==========================================
-# BARRA LATERAL (SIDEBAR) - Limpa e Institucional
+# BARRA LATERAL (SIDEBAR)
 # ==========================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/law.png", width=60)
@@ -28,7 +28,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 📌 Orientações")
     st.markdown(
-        "Utilize este painel para analisar logs de erro gerados pelo sistema de validação, obtendo diretrizes técnicas para correção dos registros."
+        "Utilize este painel para analisar logs de erro gerados pelo sistema de validação, obtendo diretrizes normativas para adequação dos arquivos."
     )
 
 # ==========================================
@@ -38,13 +38,12 @@ st.title("⚖️ Assistente SIM TCE-CE - Diagnóstico Técnico")
 st.markdown("### Central de análise e correção de erros de validação do Tribunal de Contas.")
 st.markdown("---")
 
-# Abas limpas para organizar o fluxo
 aba1, aba2 = st.tabs(["🔍 Diagnóstico de Erros", "💡 Padrões e Referências"])
 
 with aba1:
     st.info("Cole abaixo o log de erro ou o trecho do arquivo do SIM TCE-CE que necessita de análise:")
     
-    # Botão de Exemplo Rápido para teste instantâneo
+    # Botão de Exemplo Rápido
     col_btn1, col_btn2 = st.columns([2, 5])
     with col_btn1:
         if st.button("📥 Carregar Exemplo (Veículos)"):
@@ -54,7 +53,7 @@ with aba1:
                 "cd_unid_orc, dt_inclusao_vd, cd_renavam_vm ) que compõe(m) a chave do arquivo VEICULOS_DESTINACOES."
             )
     
-    # Área de texto vinculada ao estado da sessão
+    # Área de texto
     user_input = st.text_area(
         "Cole o erro aqui:",
         value=st.session_state.get("erro_input", ""),
@@ -65,29 +64,32 @@ with aba1:
     # Botão de Ação Principal
     if st.button("🚀 Processar Análise", type="primary"):
         if user_input.strip():
-            with st.spinner("Processando diagnóstico e diretrizes de correção..."):
+            with st.spinner("Processando diagnóstico otimizado..."):
                 try:
-                    # Configuração de modelo e prompt direcionado a respostas técnicas estruturadas
+                    # Configuração de velocidade e restrição de escopo via prompt
                     model = genai.GenerativeModel("gemini-3.6-flash")
                     
                     prompt = f"""
-                    Atue como um analista de suporte técnico especialista sênior no sistema SIM do TCE-CE (Tribunal de Contas dos Municípios / Estado do Ceará).
-                    Analise o erro de validação de dados abaixo. Forneça uma resposta estritamente técnica, objetiva e estruturada contendo:
-                    1. Causa raiz detalhada do problema.
-                    2. O passo a passo normativo/técnico para correção.
-                    3. Sempre que houver comandos SQL, scripts ou trechos estruturados de correção, coloque-os isolados em blocos de código markdown (```sql ou ```text) para facilitar a cópia rápida pelo operador.
+                    Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE.
+                    Analise o erro de validação de dados abaixo. Forneça um diagnóstico direto e objetivo contendo:
+                    1. A causa raiz da inconsistência no layout ou nos arquivos de envio.
+                    2. O passo a passo normativo de como corrigir diretamente nos lançamentos ou arquivos do sistema (NÃO utilize scripts SQL, consultas de banco de dados ou comandos de alteração de banco, pois a correção é estritamente via interface ou reexportação de arquivos).
 
                     Erro reportado:
                     {user_input}
                     """
                     
-                    response = model.generate_content(prompt)
+                    # Otimizando a velocidade de resposta com parâmetros de geração restritos
+                    generation_config = {
+                        "temperature": 0.2,
+                        "max_output_tokens": 1024,
+                    }
+                    
+                    response = model.generate_content(prompt, generation_config=generation_config)
                     
                     st.markdown("---")
-                    st.subheader("💡 Diagnóstico e Solução Técnica:")
-                    st.success("Análise processada com sucesso!")
-                    
-                    # Exibição limpa da resposta gerada
+                    st.subheader("💡 Diagnóstico e Diretrizes de Correção:")
+                    st.success("Análise concluída com alta performance!")
                     st.markdown(response.text)
                     
                 except Exception as e:
@@ -98,7 +100,7 @@ with aba1:
 with aba2:
     st.subheader("Diretrizes e Boas Práticas para o SIM TCE-CE")
     st.markdown("""
-    - **Integridade Referencial (Chaves Estrangeiras):** Certifique-se de que os códigos de relacionamento (como `cd_municipio`, `cd_orgao`, `cd_unid_orc`) foram devidamente enviados e processados nos arquivos base correspondentes ao período.
-    - **Sequência de Transmissão:** Respeite rigorosamente a ordem cronológica e a dependência entre os módulos exigidas pelo manual de instruções do TCE-CE.
-    - **Formatação de Registros:** Valide a ausência de caracteres especiais indesejados, delimitadores corrompidos ou formatações de datas fora do padrão normativo vigente.
+    - **Integridade de Registros:** Certifique-se de que os dados informados nos arquivos dependentes (como códigos de municípios, órgãos e unidades orçamentárias) coincidam perfeitamente com os cadastros oficiais enviados.
+    - **Sequência de Transmissão:** Respeite rigorosamente a ordem de exportação dos arquivos exigida pelo manual de instruções do TCE-CE.
+    - **Ajustes de Layout:** Corrija as divergências diretamente no sistema gerador de arquivos antes de realizar uma nova validação.
     """)
