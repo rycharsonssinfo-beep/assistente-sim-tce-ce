@@ -75,7 +75,7 @@ st.title("⚖️ Assistente SIM TCE-CE - Diagnóstico Técnico")
 st.markdown("### Central de análise e correção de erros de validação do Tribunal de Contas.")
 st.markdown("---")
 
-# Abas principais (Adicionada a Aba 3 para o Validador Posicional)
+# Abas principais
 aba1, aba2, aba3 = st.tabs(["🔍 Diagnóstico de Logs", "💡 Padrões e Referências", "📊 Validador Posicional (.dat/.txt)"])
 
 with aba1:
@@ -122,7 +122,9 @@ with aba1:
         if user_input.strip():
             with st.spinner("Processando diagnóstico completo..."):
                 try:
-                    model = genai.GenerativeModel("gemini-1.5-flash") # Atualizado para um modelo estável padrão
+                    # Modelo corrigido para o padrão ativo no ambiente do projeto
+                    model = genai.GenerativeModel("gemini-3.6-flash")
+                    
                     prompt = f"""
                     Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE.
                     Analise o erro de validação de dados abaixo (retirado de relatórios oficiais de ocorrência). 
