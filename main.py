@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Configuração da Chave da API do Gemini
+# Configuração da Chave da API
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
 if not api_key:
@@ -19,7 +19,7 @@ else:
     genai.configure(api_key=api_key)
 
 # ==========================================
-# BARRA LATERAL (SIDEBAR) & PREFERÊNCIAS
+# BARRA LATERAL (SIDEBAR) - Limpa
 # ==========================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/law.png", width=60)
@@ -27,13 +27,9 @@ with st.sidebar:
     st.markdown("Ferramenta de validação, diagnóstico e correção de inconsistências de layout do SIM TCE-CE.")
     
     st.markdown("---")
-    st.subheader("🎨 Aparência e Tema")
-    st.info("💡 **Dica:** Para alternar o tema oficial, clique no menu superior direito do Streamlit (⋮) ➔ **Settings** ➔ **Theme** (Dark/Light).")
-    
-    st.markdown("---")
     st.markdown("### 📌 Orientações")
     st.markdown(
-        "Utilize este painel para analisar logs de erro gerados pelo sistema de validação, obtendo diretrizes normativas para adequação dos arquivos."
+        "Utilize este painel para analisar logs de erro e relatórios de ocorrência do validador, obtendo diretrizes normativas para adequação dos arquivos."
     )
 
 # ==========================================
@@ -47,16 +43,22 @@ st.markdown("---")
 aba1, aba2 = st.tabs(["🔍 Diagnóstico de Erros", "💡 Padrões e Referências"])
 
 with aba1:
-    st.info("Cole abaixo o log de erro ou o trecho do arquivo do SIM TCE-CE que necessita de análise:")
+    st.info("Cole abaixo o trecho do relatório de ocorrência ou do arquivo do SIM TCE-CE que necessita de análise:")
     
-    # Botão de Exemplo Rápido
-    col_btn1, col_btn2 = st.columns([2, 5])
+    # Botões de Exemplos Rápidos baseados em relatórios reais
+    col_btn1, col_btn2 = st.columns([1, 1])
     with col_btn1:
-        if st.button("📥 Carregar Exemplo (Veículos)"):
+        if st.button("📥 Exemplo 1: Erro de Veículos (VCL)"):
             st.session_state["erro_input"] = (
                 "BV202607.VCL - DESTINAÇÃO DE VEÍCULOS\n"
                 "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, dt_versao_orc, cd_orgao, "
                 "cd_unid_orc ) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS."
+            )
+    with col_btn2:
+        if st.button("📥 Exemplo 2: Erro de Contratos (LCO)"):
+            st.session_state["erro_input"] = (
+                "CO202607.LCO - CONTRATOS\n"
+                "Descrição: Gestor responsavel pelo Contrato nao encontrado no cadastro de Ordenadores."
             )
     
     # Área de texto
@@ -64,22 +66,19 @@ with aba1:
         "Cole o erro aqui:",
         value=st.session_state.get("erro_input", ""),
         height=160,
-        placeholder="Cole o log do erro retornado pelo validador do SIM..."
+        placeholder="Cole o trecho do relatório de ocorrência..."
     )
 
     # --- DESTAQUE VISUAL DE PALAVRAS-CHAVE (BADGES) ---
     if user_input.strip():
         st.markdown("**🔍 Indicadores Identificados no Log:**")
         
-        encontrou_vcl = re.findall(r'\b[A-Z0-9]+\.VCL\b', user_input, re.IGNORECASE)
-        encontrou_campos = re.findall(r'cd_[a-z_]+|dt_[a-z_]+', user_input, re.IGNORECASE)
-        encontrou_tabelas = re.findall(r'UNIDADES_ORCAMENTARIAS|VEICULOS_DESTINACOES', user_input, re.IGNORECASE)
+        encontrou_ext = re.findall(r'\b[A-Z0-9]+\.(VCL|LCO|PAT|CPF|BAS|DCD)\b', user_input, re.IGNORECASE)
+        encontrou_campos = re.findall(r'cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+', user_input, re.IGNORECASE)
         
         tags_html = ""
-        if encontrou_vcl:
-            tags_html += f"<span style='background-color:#ffeeba; color:#856404; padding:4px 8px; border-radius:4px; margin-right:5px; font-weight:bold;'>Arquivo: {encontrou_vcl[0]}</span>"
-        if encontrou_tabelas:
-            tags_html += f"<span style='background-color:#d4edda; color:#155724; padding:4px 8px; border-radius:4px; margin-right:5px; font-weight:bold;'>Tabela Ref: {encontrou_tabelas[0]}</span>"
+        if encontrou_ext:
+            tags_html += f"<span style='background-color:#ffeeba; color:#856404; padding:4px 8px; border-radius:4px; margin-right:5px; font-weight:bold;'>Módulo/Arquivo: {encontrou_ext[0][0].upper()}</span>"
         if encontrou_campos:
             amostra_campos = ", ".join(set(encontrou_campos[:4]))
             tags_html += f"<span style='background-color:#cce5ff; color:#004085; padding:4px 8px; border-radius:4px; margin-right:5px; font-weight:bold;'>Campos Chave: {amostra_campos}</span>"
@@ -97,13 +96,14 @@ with aba1:
                     
                     prompt = f"""
                     Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE.
-                    Analise o erro de validação de dados abaixo. Forneça um diagnóstico estruturado estritamente em duas partes claras:
+                    Analise o erro de validação de dados abaixo (retirado de relatórios oficiais de ocorrência). 
+                    Forneça um diagnóstico estruturado estritamente em duas partes claras:
                     
                     ### Causa Raiz
-                    (Explique detalhadamente o motivo da inconsistência no layout ou na relação entre os arquivos).
+                    (Explique detalhadamente o motivo da inconsistência de layout, chave estrangeira ou cadastro ausente).
 
                     ### Passo a Passo Normativo
-                    (Forneça o procedimento objetivo de como corrigir diretamente nos lançamentos, telas ou rotinas do sistema).
+                    (Forneça o procedimento objetivo de como corrigir diretamente nos lançamentos ou telas do sistema ERP).
 
                     IMPORTANTE: 
                     - NÃO utilize scripts SQL, consultas de banco de dados ou comandos de alteração de banco.
@@ -131,27 +131,26 @@ with aba1:
             st.warning("⚠️ Por favor, insira ou carregue um texto de erro antes de processar a análise.")
 
 # ==========================================
-# ABA 2 APRIMORADA: GUIA DE PADRÕES E REFERÊNCIAS
+# ABA 2: GUIA DE PADRÕES E REFERÊNCIAS
 # ==========================================
 with aba2:
-    st.subheader("📚 Guia Prático de Padrões e Erros Comuns - SIM TCE-CE")
-    st.markdown("Consulte abaixo as orientações estruturadas para os principais tipos de falhas de validação encontrados no sistema.")
+    st.subheader("📚 Guia Prático com Base em Relatórios de Ocorrência")
+    st.markdown("Consulte abaixo as orientações estruturadas para os erros mais frequentes identificados nas remessas mensais.")
 
-    with st.expander("🔗 1. Erros de Chave Estrangeira e Integridade Referencial"):
+    with st.expander("🔗 1. Integridade Referencial (Chaves Estrangeiras em Veículos e Bens)"):
         st.markdown("""
-        * **O que significa:** O registro enviado em um arquivo secundário (ex: *Veículos*, *Licitações*, *Contratos*) não encontrou correspondência exata nos dados cadastrais principais (como Órgãos ou Unidades Orçamentárias).
-        * **Campos envolvidos comumente:** `cd_municipio`, `dt_versao_orc`, `cd_orgao`, `cd_unid_orc`.
-        * **Como corrigir:** Verifique se o arquivo principal da remessa (contendo a Unidade Orçamentária ou Órgão) foi exportado e processado corretamente. Certifique-se de que os códigos numéricos digitados no lançamento da despesa/frota coincidem perfeitamente com o cadastro oficial do exercício.
+        * **Ocorrência Comum:** Erros nos arquivos `.VCL` (Veículos) ou `.PAT` (Patrimônio) indicando que não há relação com os campos de UO ou Notas de Empenho.
+        * **Como corrigir:** Certifique-se de que os arquivos principais de cadastro (Unidades Orçamentárias, Órgãos e Notas de Empenho) foram gerados e enviados corretamente na mesma competência, e que os códigos informados no lançamento da frota/patrimônio correspondem exatamente aos cadastros vigentes.
         """)
 
-    with st.expander("📅 2. Divergências de Datas e Versões Orçamentárias (`dt_versao_orc`)"):
+    with st.expander("📝 2. Cadastros Prévios Obrigatórios (Contratos e Gestores)"):
         st.markdown("""
-        * **O que significa:** A data de versão do orçamento informada no lançamento do movimento difere da data enviada na tabela de UOs da mesma remessa.
-        * **Como corrigir:** Acesse o cadastro de origem no seu sistema de gestão (ERP), localize o registro que apresenta divergência de data de versão e alinhe o período para corresponder rigorosamente à competência/versão da remessa vigente no TCE-CE.
+        * **Ocorrência Comum:** Avisos de *Contrato Aditivo sem Contrato Original cadastrado* ou *Gestor responsável não encontrado no cadastro de Ordenadores*.
+        * **Como corrigir:** No seu sistema de ERP, verifique se o contrato principal foi devidamente lançado antes do aditivo. No caso de gestores, valide se o CPF do ordenador consta na remessa de agentes públicos/gestores do período correspondente.
         """)
 
-    with st.expander("📁 3. Nomenclatura e Sequência de Arquivos (.VCL, .TXT)"):
+    with st.expander("🔄 3. Duplicidade de Registros no Banco"):
         st.markdown("""
-        * **O que significa:** Falhas na extensão, caracteres corrompidos ou envio de arquivos fora da ordem cronológica exigida pelo manual de instruções.
-        * **Como corrigir:** Valide se o nome do arquivo gerado pelo seu sistema segue estritamente o padrão normativo do ano vigente (ex: prefixo do município + ano/mês + extensão do módulo). Respeite a ordem de importação recomendada pelo validador.
+        * **Ocorrência Comum:** Alerta informando que o registro já existe no banco de dados do validador (comum em arquivos de manutenção de veículos ou contas bancárias).
+        * **Como corrigir:** Remova os lançamentos duplicados na rotina de exportação do seu sistema de gestão para evitar o envio de registros repetidos na mesma remessa mensal.
         """)
