@@ -1,5 +1,7 @@
 import os
 import re
+import csv
+import io
 import streamlit as st
 import google.generativeai as genai
 
@@ -19,18 +21,52 @@ else:
     genai.configure(api_key=api_key)
 
 # ==========================================
-# BARRA LATERAL (SIDEBAR) - Limpa
+# MAPEAMENTO POSICIONAL (SIM 2026)
+# ==========================================
+LAYOUT_MAPA_SIM_2026 = {
+    1: {"campo": "Código do Órgão", "tipo": "Texto/String"},
+    2: {"campo": "Tipo de Registro", "tipo": "Numérico/Texto"},
+    3: {"campo": "Exercício de Referência", "tipo": "Ano (AAAA)"},
+    4: {"campo": "Código da Unidade Gestora (UG)", "tipo": "Texto"},
+    5: {"campo": "Sub-elemento / Movimentação", "tipo": "Texto"},
+    6: {"campo": "Data do Fato (AAAAMMDD)", "tipo": "Data"},
+    7: {"campo": "Chave Principal / Identificador (CPF/CNPJ/Item)", "tipo": "Chave/ID"},
+    8: {"campo": "Valor / Quantitativo", "tipo": "Numérico"},
+    9: {"campo": "Indicador de Situação / Status", "tipo": "Inteiro"},
+    10: {"campo": "Competência (AAAAMM)", "tipo": "Mês/Ano"}
+}
+
+def analisar_linha_sim(linha_texto, numero_linha):
+    f = io.StringIO(linha_texto.strip())
+    leitor = csv.reader(f, delimiter=',', quotechar='"')
+    try:
+        colunas = next(leitor)
+    except StopIteration:
+        return {"linha": numero_linha, "status": "Erro", "mensagem": "Linha vazia encontrada."}
+
+    erros_encontrados = []
+    for indice, valor in enumerate(colunas, start=1):
+        info_coluna = LAYOUT_MAPA_SIM_2026.get(indice, {"campo": f"Coluna Extra {indice}"})
+        if indice == 6 and len(valor.strip()) != 8:
+            erros_encontrados.append(f"Coluna {indice} ({info_coluna['campo']}): Formato de data inválido ('{valor}'). Esperado AAAAMMDD.")
+        if indice == 10 and len(valor.strip()) != 6:
+            erros_encontrados.append(f"Coluna {indice} ({info_coluna['campo']}): Competência inválida ('{valor}'). Esperado AAAAMM.")
+
+    if erros_encontrados:
+        return {"linha": numero_linha, "status": "Rejeitado", "conteudo": linha_texto.strip(), "erros": erros_encontrados}
+    else:
+        return {"linha": numero_linha, "status": "Aprovado", "conteudo": linha_texto.strip()}
+
+# ==========================================
+# BARRA LATERAL (SIDEBAR)
 # ==========================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/law.png", width=60)
     st.title("Suporte Técnico")
     st.markdown("Ferramenta de validação, diagnóstico e correção de inconsistências de layout do SIM TCE-CE.")
-    
     st.markdown("---")
     st.markdown("### 📌 Orientações")
-    st.markdown(
-        "Utilize este painel para analisar logs de erro e relatórios de ocorrência do validador, obtendo diretrizes normativas para adequação dos arquivos."
-    )
+    st.markdown("Utilize este painel para analisar logs de erro, relatórios de ocorrência e arquivos brutos por posições/colunas.")
 
 # ==========================================
 # TELA PRINCIPAL
@@ -39,20 +75,18 @@ st.title("⚖️ Assistente SIM TCE-CE - Diagnóstico Técnico")
 st.markdown("### Central de análise e correção de erros de validação do Tribunal de Contas.")
 st.markdown("---")
 
-# Abas principais
-aba1, aba2 = st.tabs(["🔍 Diagnóstico de Erros", "💡 Padrões e Referências"])
+# Abas principais (Adicionada a Aba 3 para o Validador Posicional)
+aba1, aba2, aba3 = st.tabs(["🔍 Diagnóstico de Logs", "💡 Padrões e Referências", "📊 Validador Posicional (.dat/.txt)"])
 
 with aba1:
     st.info("Cole abaixo o trecho do relatório de ocorrência ou do arquivo do SIM TCE-CE que necessita de análise:")
     
-    # Botões de Exemplos Rápidos baseados em relatórios reais
     col_btn1, col_btn2 = st.columns([1, 1])
     with col_btn1:
         if st.button("📥 Exemplo 1: Erro de Veículos (VCL)"):
             st.session_state["erro_input"] = (
                 "BV202607.VCL - DESTINAÇÃO DE VEÍCULOS\n"
-                "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, dt_versao_orc, cd_orgao, "
-                "cd_unid_orc ) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS."
+                "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc ) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS."
             )
     with col_btn2:
         if st.button("📥 Exemplo 2: Erro de Contratos (LCO)"):
@@ -61,7 +95,6 @@ with aba1:
                 "Descrição: Gestor responsavel pelo Contrato nao encontrado no cadastro de Ordenadores."
             )
     
-    # Área de texto
     user_input = st.text_area(
         "Cole o erro aqui:",
         value=st.session_state.get("erro_input", ""),
@@ -69,10 +102,8 @@ with aba1:
         placeholder="Cole o trecho do relatório de ocorrência..."
     )
 
-    # --- DESTAQUE VISUAL DE PALAVRAS-CHAVE (BADGES) ---
     if user_input.strip():
         st.markdown("**🔍 Indicadores Identificados no Log:**")
-        
         encontrou_ext = re.findall(r'\b[A-Z0-9]+\.(VCL|LCO|PAT|CPF|BAS|DCD)\b', user_input, re.IGNORECASE)
         encontrou_campos = re.findall(r'cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+', user_input, re.IGNORECASE)
         
@@ -87,14 +118,11 @@ with aba1:
             st.markdown(tags_html, unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
-    # Botão de Ação Principal
     if st.button("🚀 Processar Análise", type="primary"):
         if user_input.strip():
             with st.spinner("Processando diagnóstico completo..."):
                 try:
-                    model = genai.GenerativeModel("gemini-3.6-flash")
-                    
-                    # Prompt ajustado para focar em linguagem didática e proibir nomes fictícios de módulos de ERP
+                    model = genai.GenerativeModel("gemini-1.5-flash") # Atualizado para um modelo estável padrão
                     prompt = f"""
                     Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE.
                     Analise o erro de validação de dados abaixo (retirado de relatórios oficiais de ocorrência). 
@@ -107,7 +135,7 @@ with aba1:
                     (Forneça orientações didáticas e normativas focadas estritamente na validação de dados, como por exemplo: verificar se o órgão, unidade orçamentária ou data de versão correspondem exatamente aos cadastros oficiais enviados ao TCE-CE).
 
                     REGRAS OBRIGATÓRIAS:
-                    - NUNCA invente nomes de módulos ou telas de ERP (como "módulo de frotas", "transporte", etc.). Foque estritamente nos conceitos, campos e nas regras normativas do SIM TCE-CE.
+                    - NUNCA invente nomes de módulos ou telas de ERP. Foque estritamente nos conceitos, campos e nas regras normativas do SIM TCE-CE.
                     - NÃO utilize scripts SQL, consultas de banco de dados ou comandos de alteração de banco.
                     - Certifique-se de concluir a resposta inteira sem cortes.
 
@@ -115,12 +143,7 @@ with aba1:
                     {user_input}
                     """
                     
-                    generation_config = {
-                        "temperature": 0.2,
-                        "max_output_tokens": 4096,
-                    }
-                    
-                    response = model.generate_content(prompt, generation_config=generation_config)
+                    response = model.generate_content(prompt, generation_config={"temperature": 0.2, "max_output_tokens": 4096})
                     
                     st.markdown("---")
                     st.success("Análise concluída com sucesso!")
@@ -132,9 +155,6 @@ with aba1:
         else:
             st.warning("⚠️ Por favor, insira ou carregue um texto de erro antes de processar a análise.")
 
-# ==========================================
-# ABA 2: GUIA DE PADRÕES E REFERÊNCIAS
-# ==========================================
 with aba2:
     st.subheader("📚 Guia Prático com Base em Relatórios de Ocorrência")
     st.markdown("Consulte abaixo as orientações estruturadas para os erros mais frequentes identificados nas remessas mensais.")
@@ -156,3 +176,29 @@ with aba2:
         * **Ocorrência Comum:** Alerta informando que o registro já existe no banco de dados do validador (comum em arquivos de manutenção de veículos ou contas bancárias).
         * **Como corrigir:** Revise os arquivos de remessa mensal para eliminar lançamentos duplicados ou reenvios indevidos de registros que já foram aceitos em processamentos anteriores.
         """)
+
+with aba3:
+    st.subheader("📊 Validação e Diagnóstico Posicional por Colunas")
+    st.markdown("Cole o conteúdo bruto do arquivo do SIM (delimitado por vírgulas e aspas) para identificar em qual **coluna exata** o erro está ocorrendo:")
+    
+    arquivo_texto_input = st.text_area(
+        "Cole as linhas do arquivo (.dat / .txt):",
+        value='"992","128",202600,"23","02",20260102,"01142796415",119311,3,202603\n"992","128",202600,"30","01",202612,"01465823139","000100",4,2603',
+        height=150
+    )
+    
+    if st.button("🔎 Analisar Posicionamento das Colunas"):
+        if arquivo_texto_input.strip():
+            linhas = arquivo_texto_input.strip().split("\n")
+            st.markdown("---")
+            for i, linha in enumerate(linhas, start=1):
+                if linha.strip():
+                    res = analisar_linha_sim(linha, i)
+                    if res["status"] == "Rejeitado":
+                        st.error(f"Linha {res['linha']} - Rejeitada:")
+                        for err in res["erros"]:
+                            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;• {err}")
+                    else:
+                        st.success(f"Linha {res['linha']} - Aprovada (Estrutura de colunas correta)")
+        else:
+            st.warning("⚠️ Insira o conteúdo do arquivo para realizar a varredura posicional.")
