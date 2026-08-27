@@ -28,8 +28,8 @@ if st.button("Analisar Erro"):
     if user_input:
         with st.spinner("Analisando com o Gemini..."):
             try:
-                # Utilizando o modelo atualizado e compatível
-                model = genai.GenerativeModel("gemini-2.5-flash")
+                # Utilizando o modelo atualizado conforme a mensagem de erro
+                model = genai.GenerativeModel("gemini-3.6-flash")
                 prompt = f"Atue como um especialista técnico no sistema SIM do TCE-CE. Analise e corrija o seguinte erro:\n\n{user_input}"
                 response = model.generate_content(prompt)
                 
