@@ -48,9 +48,9 @@ with aba1:
     with col_btn1:
         if st.button("📥 Carregar Exemplo (Veículos)"):
             st.session_state["erro_input"] = (
-                "BV202607.VCL - BAIXA NA DESTINAÇÃO DE VEÍCULOS\n"
+                "BV202607.VCL - DESTINAÇÃO DE VEÍCULOS\n"
                 "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, dt_versao_orc, cd_orgao, "
-                "cd_unid_orc, dt_inclusao_vd, cd_renavam_vm ) que compõe(m) a chave do arquivo VEICULOS_DESTINACOES."
+                "cd_unid_orc ) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS."
             )
     
     # Área de texto
@@ -66,23 +66,22 @@ with aba1:
         if user_input.strip():
             with st.spinner("Processando diagnóstico otimizado..."):
                 try:
-                    # Configuração de velocidade e restrição de escopo via prompt
                     model = genai.GenerativeModel("gemini-3.6-flash")
                     
                     prompt = f"""
                     Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE.
-                    Analise o erro de validação de dados abaixo. Forneça um diagnóstico direto e objetivo contendo:
-                    1. A causa raiz da inconsistência no layout ou nos arquivos de envio.
+                    Analise o erro de validação de dados abaixo. Forneça um diagnóstico completo, direto e objetivo contendo:
+                    1. A causa raiz detalhada da inconsistência no layout ou nos arquivos de envio.
                     2. O passo a passo normativo de como corrigir diretamente nos lançamentos ou arquivos do sistema (NÃO utilize scripts SQL, consultas de banco de dados ou comandos de alteração de banco, pois a correção é estritamente via interface ou reexportação de arquivos).
 
                     Erro reportado:
                     {user_input}
                     """
                     
-                    # Otimizando a velocidade de resposta com parâmetros de geração restritos
+                    # Ajustado para 2048 tokens para garantir que a resposta não seja cortada no meio
                     generation_config = {
                         "temperature": 0.2,
-                        "max_output_tokens": 1024,
+                        "max_output_tokens": 2048,
                     }
                     
                     response = model.generate_content(prompt, generation_config=generation_config)
