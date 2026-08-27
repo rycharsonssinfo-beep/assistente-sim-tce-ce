@@ -2,14 +2,14 @@ import os
 import streamlit as st
 import google.generativeai as genai
 
-# Configuração da página (Modo Wide e ícone customizado)
+# Configuração da página
 st.set_page_config(
     page_title="Assistente SIM TCE-CE",
     page_icon="⚖️",
     layout="wide"
 )
 
-# Configuração da Chave da API do Gemini
+# Configuração da Chave da API
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
 if not api_key:
@@ -64,31 +64,32 @@ with aba1:
     # Botão de Ação Principal
     if st.button("🚀 Processar Análise", type="primary"):
         if user_input.strip():
-            with st.spinner("Processando diagnóstico otimizado..."):
+            with st.spinner("Processando diagnóstico completo..."):
                 try:
                     model = genai.GenerativeModel("gemini-3.6-flash")
                     
                     prompt = f"""
                     Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE.
-                    Analise o erro de validação de dados abaixo. Forneça um diagnóstico completo, direto e objetivo contendo:
+                    Analise o erro de validação de dados abaixo. Forneça um diagnóstico completo, claro e estruturado contendo:
                     1. A causa raiz detalhada da inconsistência no layout ou nos arquivos de envio.
-                    2. O passo a passo normativo de como corrigir diretamente nos lançamentos ou arquivos do sistema (NÃO utilize scripts SQL, consultas de banco de dados ou comandos de alteração de banco, pois a correção é estritamente via interface ou reexportação de arquivos).
+                    2. O passo a passo normativo de como corrigir diretamente nos lançamentos ou arquivos do sistema.
+                    IMPORTANTE: NÃO utilize scripts SQL, consultas de banco de dados ou comandos de alteração de banco, pois a correção é estritamente via interface ou reexportação de arquivos. Certifique-se de concluir a resposta inteira sem cortes.
 
                     Erro reportado:
                     {user_input}
                     """
                     
-                    # Ajustado para 2048 tokens para garantir que a resposta não seja cortada no meio
+                    # Aumentado para 4096 tokens para garantir que o texto nunca seja cortado pela metade
                     generation_config = {
                         "temperature": 0.2,
-                        "max_output_tokens": 2048,
+                        "max_output_tokens": 4096,
                     }
                     
                     response = model.generate_content(prompt, generation_config=generation_config)
                     
                     st.markdown("---")
                     st.subheader("💡 Diagnóstico e Diretrizes de Correção:")
-                    st.success("Análise concluída com alta performance!")
+                    st.success("Análise concluída com sucesso!")
                     st.markdown(response.text)
                     
                 except Exception as e:
