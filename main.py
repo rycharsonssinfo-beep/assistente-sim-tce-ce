@@ -21,16 +21,15 @@ else:
 st.title("🤖 Assistente SIM TCE-CE - Diagnóstico e Correção de Erros")
 st.write("Bem-vindo ao seu assistente inteligente integrado ao Google Gemini.")
 
-# --- COLOQUE AQUI A SUA LÓGICA / INTERFACE DO STREAMLIT ---
-# Exemplo de campo de entrada para os erros do SIM:
+# Caixa de entrada para os erros do SIM
 user_input = st.text_area("Cole aqui o erro ou trecho do arquivo do SIM TCE-CE para análise:")
 
 if st.button("Analisar Erro"):
     if user_input:
         with st.spinner("Analisando com o Gemini..."):
             try:
-                # Usando o modelo recomendado do Gemini
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                # Utilizando o modelo atualizado e compatível
+                model = genai.GenerativeModel("gemini-2.5-flash")
                 prompt = f"Atue como um especialista técnico no sistema SIM do TCE-CE. Analise e corrija o seguinte erro:\n\n{user_input}"
                 response = model.generate_content(prompt)
                 
