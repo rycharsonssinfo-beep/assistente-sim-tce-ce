@@ -3,7 +3,7 @@ import re
 import streamlit as st
 import google.generativeai as genai
 
-# Configuração da página (Modo Wide e ícone customizado)
+# Configuração da página
 st.set_page_config(
     page_title="Assistente SIM TCE-CE",
     page_icon="⚖️",
@@ -27,8 +27,8 @@ with st.sidebar:
     st.markdown("Ferramenta de validação, diagnóstico e correção de inconsistências de layout do SIM TCE-CE.")
     
     st.markdown("---")
-    st.subheader("🎨 Aparência da Interface")
-    modo_escuro = st.toggle("Ativar Modo Escuro", value=False)
+    st.subheader("🎨 Aparência e Tema")
+    st.info("💡 **Dica:** Para alternar o tema oficial, clique no menu superior direito do Streamlit (⋮) ➔ **Settings** ➔ **Theme** (Dark/Light).")
     
     st.markdown("---")
     st.markdown("### 📌 Orientações")
@@ -43,7 +43,7 @@ st.title("⚖️ Assistente SIM TCE-CE - Diagnóstico Técnico")
 st.markdown("### Central de análise e correção de erros de validação do Tribunal de Contas.")
 st.markdown("---")
 
-# Abas limpas
+# Abas principais
 aba1, aba2 = st.tabs(["🔍 Diagnóstico de Erros", "💡 Padrões e Referências"])
 
 with aba1:
@@ -69,21 +69,18 @@ with aba1:
 
     # --- DESTAQUE VISUAL DE PALAVRAS-CHAVE (BADGES) ---
     if user_input.strip():
-        st.markdown("**🔍 IndicadoresIdentificados no Log:**")
+        st.markdown("**🔍 Indicadores Identificados no Log:**")
         
-        # Lógica para varrer termos críticos no texto colado
         encontrou_vcl = re.findall(r'\b[A-Z0-9]+\.VCL\b', user_input, re.IGNORECASE)
         encontrou_campos = re.findall(r'cd_[a-z_]+|dt_[a-z_]+', user_input, re.IGNORECASE)
         encontrou_tabelas = re.findall(r'UNIDADES_ORCAMENTARIAS|VEICULOS_DESTINACOES', user_input, re.IGNORECASE)
         
-        # Exibição visual limpa por tags usando colunas / markdown customizado
         tags_html = ""
         if encontrou_vcl:
             tags_html += f"<span style='background-color:#ffeeba; color:#856404; padding:4px 8px; border-radius:4px; margin-right:5px; font-weight:bold;'>Arquivo: {encontrou_vcl[0]}</span>"
         if encontrou_tabelas:
             tags_html += f"<span style='background-color:#d4edda; color:#155724; padding:4px 8px; border-radius:4px; margin-right:5px; font-weight:bold;'>Tabela Ref: {encontrou_tabelas[0]}</span>"
         if encontrou_campos:
-            # Mostra alguns campos-chave encontrados
             amostra_campos = ", ".join(set(encontrou_campos[:4]))
             tags_html += f"<span style='background-color:#cce5ff; color:#004085; padding:4px 8px; border-radius:4px; margin-right:5px; font-weight:bold;'>Campos Chave: {amostra_campos}</span>"
             
@@ -125,11 +122,7 @@ with aba1:
                     
                     st.markdown("---")
                     st.success("Análise concluída com sucesso!")
-                    
-                    # Layout em Cartões (Cards) visuais para separar as etapas
                     st.markdown("### 💡 Diagnóstico e Solução Técnica")
-                    
-                    # Exibindo o texto gerado de forma limpa
                     st.markdown(response.text)
                     
                 except Exception as e:
@@ -137,10 +130,28 @@ with aba1:
         else:
             st.warning("⚠️ Por favor, insira ou carregue um texto de erro antes de processar a análise.")
 
+# ==========================================
+# ABA 2 APRIMORADA: GUIA DE PADRÕES E REFERÊNCIAS
+# ==========================================
 with aba2:
-    st.subheader("Diretrizes e Boas Práticas para o SIM TCE-CE")
-    st.markdown("""
-    - **Integridade de Registros:** Certifique-se de que os dados informados nos arquivos dependentes (como códigos de municípios, órgãos e unidades orçamentárias) coincidam perfeitamente com os cadastros oficiais enviados.
-    - **Sequência de Transmissão:** Respeite rigorosamente a ordem de exportação dos arquivos exigida pelo manual de instruções do TCE-CE.
-    - **Ajustes de Layout:** Corrija as divergências diretamente no sistema gerador de arquivos antes de realizar uma nova validação.
-    """)
+    st.subheader("📚 Guia Prático de Padrões e Erros Comuns - SIM TCE-CE")
+    st.markdown("Consulte abaixo as orientações estruturadas para os principais tipos de falhas de validação encontrados no sistema.")
+
+    with st.expander("🔗 1. Erros de Chave Estrangeira e Integridade Referencial"):
+        st.markdown("""
+        * **O que significa:** O registro enviado em um arquivo secundário (ex: *Veículos*, *Licitações*, *Contratos*) não encontrou correspondência exata nos dados cadastrais principais (como Órgãos ou Unidades Orçamentárias).
+        * **Campos envolvidos comumente:** `cd_municipio`, `dt_versao_orc`, `cd_orgao`, `cd_unid_orc`.
+        * **Como corrigir:** Verifique se o arquivo principal da remessa (contendo a Unidade Orçamentária ou Órgão) foi exportado e processado corretamente. Certifique-se de que os códigos numéricos digitados no lançamento da despesa/frota coincidem perfeitamente com o cadastro oficial do exercício.
+        """)
+
+    with st.expander("📅 2. Divergências de Datas e Versões Orçamentárias (`dt_versao_orc`)"):
+        st.markdown("""
+        * **O que significa:** A data de versão do orçamento informada no lançamento do movimento difere da data enviada na tabela de UOs da mesma remessa.
+        * **Como corrigir:** Acesse o cadastro de origem no seu sistema de gestão (ERP), localize o registro que apresenta divergência de data de versão e alinhe o período para corresponder rigorosamente à competência/versão da remessa vigente no TCE-CE.
+        """)
+
+    with st.expander("📁 3. Nomenclatura e Sequência de Arquivos (.VCL, .TXT)"):
+        st.markdown("""
+        * **O que significa:** Falhas na extensão, caracteres corrompidos ou envio de arquivos fora da ordem cronológica exigida pelo manual de instruções.
+        * **Como corrigir:** Valide se o nome do arquivo gerado pelo seu sistema segue estritamente o padrão normativo do ano vigente (ex: prefixo do município + ano/mês + extensão do módulo). Respeite a ordem de importação recomendada pelo validador.
+        """)
