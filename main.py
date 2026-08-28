@@ -5,18 +5,56 @@ import time
 import streamlit as st
 import google.generativeai as genai
 
-# Configuração da página
+# ==========================================
+# 1. CONFIGURAÇÃO DA PÁGINA E ESTILO VISUAL
+# ==========================================
 st.set_page_config(
     page_title="Assistente SIM TCE-CE",
     page_icon="⚖️",
     layout="wide"
 )
 
-# Arquivo onde o histórico será salvo permanentemente
+# Estilização CSS personalizada para dar um ar corporativo e moderno
+st.markdown("""
+    <style>
+    /* Estilização geral e fontes */
+    .main {
+        background-color: #F8FAFC;
+    }
+    
+    /* Cabeçalhos estilizados */
+    h1, h2, h3 {
+        color: #0F172A;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    /* Cartões de métricas e blocos institucionais */
+    .stMetric {
+        background-color: #FFFFFF;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    
+    /* Ajustes em blocos de código/logs */
+    blockquote {
+        border-left: 4px solid #0284C7;
+        background-color: #F1F5F9;
+        padding: 10px 15px;
+        border-radius: 0 6px 6px 0;
+        color: #334155;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# 2. PERSISTÊNCIA DE DADOS (ARQUIVO JSON)
+# ==========================================
 ARQUIVO_HISTORICO = "historico_sim_tce.json"
 
 def carregar_historico():
-    """Carrega o histórico salvo do arquivo JSON, se existir."""
+    """Carrega o histórico salvo do arquivo JSON de forma segura."""
     if os.path.exists(ARQUIVO_HISTORICO):
         try:
             with open(ARQUIVO_HISTORICO, "r", encoding="utf-8") as f:
@@ -26,18 +64,20 @@ def carregar_historico():
     return []
 
 def salvar_historico(historico):
-    """Salva a lista de histórico no arquivo JSON."""
+    """Salva a lista de histórico permanentemente no arquivo JSON."""
     try:
         with open(ARQUIVO_HISTORICO, "w", encoding="utf-8") as f:
             json.dump(historico, f, ensure_ascii=False, indent=4)
     except Exception as e:
         print(f"Erro ao salvar histórico: {e}")
 
-# Inicializa o histórico persistente na sessão do Streamlit
+# Inicializa o histórico na sessão do Streamlit
 if "historico_casos" not in st.session_state:
     st.session_state["historico_casos"] = carregar_historico()
 
-# Configuração da Chave da API
+# ==========================================
+# 3. CONFIGURAÇÃO DA API GEMINI
+# ==========================================
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
 if not api_key:
@@ -46,85 +86,95 @@ else:
     genai.configure(api_key=api_key)
 
 # ==========================================
-# BARRA LATERAL (SIDEBAR)
+# 4. BARRA LATERAL (SIDEBAR PROFISSIONAL)
 # ==========================================
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/law.png", width=60)
-    st.title("Suporte Técnico")
-    st.markdown("Ferramenta de validação, diagnóstico e correção de inconsistências de layout do SIM TCE-CE.")
+    st.markdown("### ⚖️ SIM TCE-CE")
+    st.caption("Painel Técnico de Suporte e Diagnóstico")
     st.markdown("---")
-    st.markdown("### 📌 Orientações")
-    st.markdown("Utilize este painel para analisar logs de erro, identificando de forma didática a posição e a função de cada campo no layout.")
+    
+    st.markdown("**📌 Sobre a Ferramenta**")
+    st.markdown("Plataforma desenvolvida para auxílio na validação, leitura de relatórios de ocorrência e correção de layouts do Tribunal de Contas.")
     
     st.markdown("---")
-    st.metric("Casos Salvos na Base", len(st.session_state["historico_casos"]))
+    # Métrica corporativa
+    st.metric(label="Casos na Base Permanente", value=len(st.session_state["historico_casos"]))
+    
+    st.markdown("---")
+    st.caption("Desenvolvido para otimização de rotinas contábeis e prestação de contas.")
 
 # ==========================================
-# TELA PRINCIPAL
+# 5. TELA PRINCIPAL E ABAS
 # ==========================================
-st.title("⚖️ Assistente SIM TCE-CE - Diagnóstico Técnico")
-st.markdown("### Central de análise e correção de erros de validação do Tribunal de Contas.")
+st.title("Assistente de Diagnóstico SIM TCE-CE")
+st.markdown("Central inteligente de análise de consistências, tradução de logs e consulta de orientações técnicas.")
 st.markdown("---")
 
-# Abas principais atualizadas
+# Abas principais estruturadas
 aba1, aba2, aba3 = st.tabs([
-    "🔍 Diagnóstico de Logs e Posições", 
-    "📂 Histórico de Casos Resolvidos", 
-    "💡 Padrões e Referências"
+    "🔍 Diagnóstico Inteligente", 
+    "📂 Histórico Permanente", 
+    "💡 Base de Conhecimento"
 ])
 
+# ------------------------------------------
+# ABA 1: DIAGNÓSTICO E ENTRADA DE LOGS
+# ------------------------------------------
 with aba1:
-    st.info("Cole abaixo o trecho do relatório de ocorrência do SIM TCE-CE que necessita de análise:")
+    st.markdown("#### 📥 Entrada de Dados do Relatório de Ocorrência")
+    st.info("Cole abaixo o trecho do relatório de ocorrência do PGI/SIM TCE-CE para gerar o diagnóstico técnico.")
     
-    col_btn1, col_btn2 = st.columns([1, 1])
+    # Atalhos rápidos estilizados
+    st.markdown("**Testar com exemplos comuns:**")
+    col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        if st.button("📥 Exemplo 1: Erro de Veículos (VCL)"):
+        if st.button("🚗 Exemplo: Veículos (.VCL)", use_container_width=True):
             st.session_state["erro_input"] = (
                 "BV202607.VCL - DESTINAÇÃO DE VEÍCULOS\n"
                 "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc ) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS."
             )
     with col_btn2:
-        if st.button("📥 Exemplo 2: Erro de Patrimônio (PAT)"):
+        if st.button("🏛️ Exemplo: Patrimônio (.PAT)", use_container_width=True):
             st.session_state["erro_input"] = (
                 "RP202607.PAT - CONTAS REDUTORAS DOS BENS INCORPORADOS AO PATRIMÔNIO DO MUNICÍPIO\n"
                 "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, nu_registro_bem ) que compõe(m) a chave do arquivo BENS_MUNICIPIOS."
             )
     
     user_input = st.text_area(
-        "Cole o erro aqui:",
+        "Relatório de Erro:",
         value=st.session_state.get("erro_input", ""),
-        height=160,
-        placeholder="Cole o trecho do relatório de ocorrência..."
+        height=150,
+        placeholder="Cole o trecho do erro aqui..."
     )
 
+    # Identificação visual prévia de tags no log inserido
     if user_input.strip():
-        st.markdown("**🔍 Indicadores Identificados no Log:**")
         encontrou_ext = re.findall(r'\b[A-Z0-9]+\.(VCL|LCO|PAT|CPF|BAS|DCD)\b', user_input, re.IGNORECASE)
         encontrou_campos = re.findall(r'cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+', user_input, re.IGNORECASE)
         
         tags_html = ""
         if encontrou_ext:
-            tags_html += f"<span style='background-color:#ffeeba; color:#856404; padding:4px 8px; border-radius:4px; margin-right:5px; font-weight:bold;'>Módulo/Arquivo: {encontrou_ext[0][0].upper()}</span>"
+            tags_html += f"<span style='background-color:#E0F2FE; color:#0369A1; padding:4px 10px; border-radius:6px; margin-right:8px; font-weight:600; font-size:13px;'>📦 Módulo: {encontrou_ext[0][0].upper()}</span>"
         if encontrou_campos:
             amostra_campos = ", ".join(set(encontrou_campos[:4]))
-            tags_html += f"<span style='background-color:#cce5ff; color:#004085; padding:4px 8px; border-radius:4px; margin-right:5px; font-weight:bold;'>Campos Chave: {amostra_campos}</span>"
+            tags_html += f"<span style='background-color:#FEF3C7; color:#B45309; padding:4px 10px; border-radius:6px; margin-right:8px; font-weight:600; font-size:13px;'>🔑 Chaves: {amostra_campos}</span>"
             
         if tags_html:
-            st.markdown(tags_html, unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown(f"<div style='margin-bottom: 15px;'>{tags_html}</div>", unsafe_allow_html=True)
 
-    if st.button("🚀 Processar Análise", type="primary"):
+    # Botão de ação principal com destaque corporativo
+    if st.button("🚀 Processar Análise Técnica", type="primary", use_container_width=True):
         if user_input.strip():
-            # Verifica se o erro já existe no histórico persistido (Economiza IA/Cota)
+            # Verifica se o erro já existe na base permanente (Economiza API e evita erro 429)
             caso_existente = next((item for item in st.session_state["historico_casos"] if item["erro"].strip() == user_input.strip()), None)
             
             if caso_existente:
                 st.markdown("---")
-                st.success("⚡ Diagnóstico recuperado instantaneamente do Histórico Permanente (sem gasto de API)!")
-                st.markdown("### 💡 Diagnóstico e Orientação Detalhada")
+                st.success("⚡ Diagnóstico recuperado instantaneamente do Histórico Permanente (0 chamadas à API)!")
+                st.markdown("### 💡 Diagnóstico e Orientação Técnica")
                 st.markdown(caso_existente["resposta"])
             else:
-                with st.spinner("Processando diagnóstico detalhado (aguarde caso haja fila de cota)..."):
+                with st.spinner("Analisando leiaute e consultando diretrizes de suporte..."):
                     resposta_obtida = None
                     sucesso = False
                     
@@ -176,7 +226,7 @@ with aba1:
                             break
 
                     if sucesso and resposta_obtida:
-                        # Adiciona ao histórico e salva no arquivo JSON permanente
+                        # Salva na memória e grava permanentemente no arquivo JSON
                         novo_caso = {
                             "erro": user_input.strip(),
                             "resposta": resposta_obtida
@@ -185,23 +235,31 @@ with aba1:
                         salvar_historico(st.session_state["historico_casos"])
                         
                         st.markdown("---")
-                        st.success("Análise concluída com sucesso e salva permanentemente no Histórico!")
-                        st.markdown("### 💡 Diagnóstico e Orientação Detalhada")
+                        st.success("Análise concluída com sucesso e gravada na Base Permanente!")
+                        st.markdown("### 💡 Diagnóstico e Orientação Técnica")
                         st.markdown(resposta_obtida)
                     else:
                         st.error("⚠️ O limite de requisições gratuitas da API foi atingido (Erro 429). O sistema tentou modelos alternativos, mas todos retornaram sobrecarga momentânea.")
-                        st.info("💡 **Dica:** Aguarde aproximadamente 30 segundos ou busque na aba **Histórico de Casos Resolvidos** caso este erro já tenha sido solucionado antes.")
+                        st.info("💡 **Dica:** Aguarde alguns segundos ou pesquise na aba **Histórico Permanente** se este caso já foi solucionado anteriormente.")
         else:
             st.warning("⚠️ Por favor, insira ou carregue um texto de erro antes de processar a análise.")
 
-with aba2:
-    st.subheader("📂 Histórico de Casos Resolvidos (Base Permanente)")
-    st.markdown("Consulte abaixo os erros já pesquisados e salvos de forma permanente. Utilize o campo de busca para encontrar soluções instantaneamente.")
+# ------------------------------------------
+# ABA 2: HISTÓRICO PERMANENTE COM BUSCA
+# ------------------------------------------
+aba2_tab1 = aba2
+with aba2_tab1:
+    st.markdown("#### 📂 Repositório de Casos Resolvidos")
+    st.markdown("Consulte a base de dados acumulada. As análises ficam salvas permanentemente para consultas futuras rápidas, sem consumo de cota da API.")
 
     if not st.session_state["historico_casos"]:
-        st.info("Nenhum caso salvo na base permanente ainda. Utilize a aba de Diagnóstico para registrar novas ocorrências.")
+        st.info("Ainda não há casos salvos na base permanente. Realize sua primeira análise na aba de Diagnóstico.")
     else:
-        termo_busca_historico = st.text_input("🔍 Buscar no histórico permanente:", placeholder="Digite o nome do arquivo, ex: .PAT, .VCL ou parte do erro...").lower()
+        # Campo de busca moderna para o repositório
+        termo_busca_historico = st.text_input(
+            "🔍 Pesquisar no histórico:", 
+            placeholder="Digite palavras-chave, ex: .PAT, .VCL, município, chaves..."
+        ).lower()
 
         casos_filtrados = [
             caso for caso in st.session_state["historico_casos"]
@@ -209,22 +267,26 @@ with aba2:
         ]
 
         if not casos_filtrados:
-            st.warning("Nenhum caso encontrado com o termo pesquisado.")
+            st.warning("Nenhum caso correspondente encontrado na base permanente.")
         else:
-            st.markdown(f"Exibindo {len(casos_filtrados)} de {len(st.session_state['historico_casos'])} caso(s) encontrado(s):")
+            st.markdown(f"**Resultados encontrados:** {len(casos_filtrados)} de {len(st.session_state['historico_casos'])} registro(s)")
             st.markdown("---")
             
             for idx, caso in enumerate(casos_filtrados):
-                titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:60]
-                with st.expander(f"Caso: {titulo_resumo}"):
-                    st.markdown(f"**Log Original:**\n> {caso['erro']}")
+                titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:65]
+                with st.expander(f"📌 Caso #{idx+1}: {titulo_resumo}"):
+                    st.markdown(f"**Log Registrado:**")
+                    st.markdown(f"> {caso['erro']}")
                     st.markdown("---")
                     st.markdown(caso["resposta"])
 
+# ------------------------------------------
+# ABA 3: BASE DE CONHECIMENTO E REFERÊNCIAS
+# ------------------------------------------
 with aba3:
-    st.subheader("📚 Guia Prático e Base de Conhecimento SIM 2026")
+    st.markdown("#### 📚 Base de Conhecimento e Padrões SIM 2026")
     
-    termo_busca = st.text_input("🔍 Pesquisar na base de conhecimento:", placeholder="Digite ex: 'Veículos', 'Contratos', 'Patrimônio'...").lower()
+    termo_busca = st.text_input("🔍 Filtrar guias de referência:", placeholder="Digite ex: 'Veículos', 'Contratos', 'Patrimônio'...").lower()
 
     with st.expander("🏛️ 1. Erros de Unidades Orçamentárias e Vínculos (Ex: .VCL, .PAT)"):
         st.markdown("""
