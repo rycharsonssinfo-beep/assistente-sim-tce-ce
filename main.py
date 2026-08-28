@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import time
 import streamlit as st
 import google.generativeai as genai
@@ -11,9 +12,30 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inicializa o histórico de casos resolvidos na sessão do Streamlit
+# Arquivo onde o histórico será salvo permanentemente
+ARQUIVO_HISTORICO = "historico_sim_tce.json"
+
+def carregar_historico():
+    """Carrega o histórico salvo do arquivo JSON, se existir."""
+    if os.path.exists(ARQUIVO_HISTORICO):
+        try:
+            with open(ARQUIVO_HISTORICO, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def salvar_historico(historico):
+    """Salva a lista de histórico no arquivo JSON."""
+    try:
+        with open(ARQUIVO_HISTORICO, "w", encoding="utf-8") as f:
+            json.dump(historico, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Erro ao salvar histórico: {e}")
+
+# Inicializa o histórico persistente na sessão do Streamlit
 if "historico_casos" not in st.session_state:
-    st.session_state["historico_casos"] = []
+    st.session_state["historico_casos"] = carregar_historico()
 
 # Configuração da Chave da API
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
@@ -35,7 +57,7 @@ with st.sidebar:
     st.markdown("Utilize este painel para analisar logs de erro, identificando de forma didática a posição e a função de cada campo no layout.")
     
     st.markdown("---")
-    st.metric("Casos Salvos no Histórico", len(st.session_state["historico_casos"]))
+    st.metric("Casos Salvos na Base", len(st.session_state["historico_casos"]))
 
 # ==========================================
 # TELA PRINCIPAL
@@ -93,12 +115,12 @@ with aba1:
 
     if st.button("🚀 Processar Análise", type="primary"):
         if user_input.strip():
-            # Verifica se o erro já existe no histórico da sessão (Economiza IA/Cota)
+            # Verifica se o erro já existe no histórico persistido (Economiza IA/Cota)
             caso_existente = next((item for item in st.session_state["historico_casos"] if item["erro"].strip() == user_input.strip()), None)
             
             if caso_existente:
                 st.markdown("---")
-                st.success("⚡ Diagnóstico recuperado instantaneamente do Histórico (sem gasto de API)!")
+                st.success("⚡ Diagnóstico recuperado instantaneamente do Histórico Permanente (sem gasto de API)!")
                 st.markdown("### 💡 Diagnóstico e Orientação Detalhada")
                 st.markdown(caso_existente["resposta"])
             else:
@@ -154,33 +176,33 @@ with aba1:
                             break
 
                     if sucesso and resposta_obtida:
-                        # Salva automaticamente no histórico da sessão
-                        st.session_state["historico_casos"].append({
+                        # Adiciona ao histórico e salva no arquivo JSON permanente
+                        novo_caso = {
                             "erro": user_input.strip(),
                             "resposta": resposta_obtida
-                        })
+                        }
+                        st.session_state["historico_casos"].append(novo_caso)
+                        salvar_historico(st.session_state["historico_casos"])
                         
                         st.markdown("---")
-                        st.success("Análise concluída com sucesso e salva no Histórico!")
+                        st.success("Análise concluída com sucesso e salva permanentemente no Histórico!")
                         st.markdown("### 💡 Diagnóstico e Orientação Detalhada")
                         st.markdown(resposta_obtida)
                     else:
                         st.error("⚠️ O limite de requisições gratuitas da API foi atingido (Erro 429). O sistema tentou modelos alternativos, mas todos retornaram sobrecarga momentânea.")
-                        st.info("💡 **Dica:** Aguarde aproximadamente 30 segundos ou consulte a aba **Histórico de Casos Resolvidos** caso este erro já tenha sido solucionado antes.")
+                        st.info("💡 **Dica:** Aguarde aproximadamente 30 segundos ou busque na aba **Histórico de Casos Resolvidos** caso este erro já tenha sido solucionado antes.")
         else:
             st.warning("⚠️ Por favor, insira ou carregue um texto de erro antes de processar a análise.")
 
 with aba2:
-    st.subheader("📂 Casos Anteriores Resolvidos")
-    st.markdown("Consulte abaixo os erros já pesquisados e salvos nesta sessão. Utilize o campo de busca para encontrar rapidamente um caso específico.")
+    st.subheader("📂 Histórico de Casos Resolvidos (Base Permanente)")
+    st.markdown("Consulte abaixo os erros já pesquisados e salvos de forma permanente. Utilize o campo de busca para encontrar soluções instantaneamente.")
 
     if not st.session_state["historico_casos"]:
-        st.info("Nenhum caso foi pesquisado e salvo nesta sessão ainda. Utilize a aba de Diagnóstico para começar.")
+        st.info("Nenhum caso salvo na base permanente ainda. Utilize a aba de Diagnóstico para registrar novas ocorrências.")
     else:
-        # Campo de busca para o histórico
-        termo_busca_historico = st.text_input("🔍 Buscar no histórico de casos:", placeholder="Digite o nome do arquivo, ex: .PAT, .VCL ou parte do erro...").lower()
+        termo_busca_historico = st.text_input("🔍 Buscar no histórico permanente:", placeholder="Digite o nome do arquivo, ex: .PAT, .VCL ou parte do erro...").lower()
 
-        # Filtra os casos com base no termo digitado
         casos_filtrados = [
             caso for caso in st.session_state["historico_casos"]
             if termo_busca_historico in caso["erro"].lower() or termo_busca_historico in caso["resposta"].lower()
