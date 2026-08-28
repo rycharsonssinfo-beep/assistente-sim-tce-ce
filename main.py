@@ -44,7 +44,7 @@ st.title("⚖️ Assistente SIM TCE-CE - Diagnóstico Técnico")
 st.markdown("### Central de análise e correção de erros de validação do Tribunal de Contas.")
 st.markdown("---")
 
-# Abas principais atualizadas (incluindo o Histórico de Casos)
+# Abas principais atualizadas
 aba1, aba2, aba3 = st.tabs([
     "🔍 Diagnóstico de Logs e Posições", 
     "📂 Histórico de Casos Resolvidos", 
@@ -172,23 +172,36 @@ with aba1:
 
 with aba2:
     st.subheader("📂 Casos Anteriores Resolvidos")
-    st.markdown("Esta aba armazena os erros já pesquisados anteriormente nesta sessão. Clique em um caso para relembrar a solução instantaneamente sem gastar novas requisições da IA.")
+    st.markdown("Consulte abaixo os erros já pesquisados e salvos nesta sessão. Utilize o campo de busca para encontrar rapidamente um caso específico.")
 
     if not st.session_state["historico_casos"]:
         st.info("Nenhum caso foi pesquisado e salvo nesta sessão ainda. Utilize a aba de Diagnóstico para começar.")
     else:
-        for idx, caso in enumerate(st.session_state["historico_casos"]):
-            # Cria um resumo limpo para o título do expander
-            titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:60]
-            with st.expander(f"Caso #{idx+1}: {titulo_resumo}"):
-                st.markdown(f"**Log Original:**\n> {caso['erro']}")
-                st.markdown("---")
-                st.markdown(caso["resposta"])
+        # Campo de busca para o histórico
+        termo_busca_historico = st.text_input("🔍 Buscar no histórico de casos:", placeholder="Digite o nome do arquivo, ex: .PAT, .VCL ou parte do erro...").lower()
+
+        # Filtra os casos com base no termo digitado
+        casos_filtrados = [
+            caso for caso in st.session_state["historico_casos"]
+            if termo_busca_historico in caso["erro"].lower() or termo_busca_historico in caso["resposta"].lower()
+        ]
+
+        if not casos_filtrados:
+            st.warning("Nenhum caso encontrado com o termo pesquisado.")
+        else:
+            st.markdown(f"Exibindo {len(casos_filtrados)} de {len(st.session_state['historico_casos'])} caso(s) encontrado(s):")
+            st.markdown("---")
+            
+            for idx, caso in enumerate(casos_filtrados):
+                titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:60]
+                with st.expander(f"Caso: {titulo_resumo}"):
+                    st.markdown(f"**Log Original:**\n> {caso['erro']}")
+                    st.markdown("---")
+                    st.markdown(caso["resposta"])
 
 with aba3:
     st.subheader("📚 Guia Prático e Base de Conhecimento SIM 2026")
     
-    # Campo de busca rápida na base de conhecimento
     termo_busca = st.text_input("🔍 Pesquisar na base de conhecimento:", placeholder="Digite ex: 'Veículos', 'Contratos', 'Patrimônio'...").lower()
 
     with st.expander("🏛️ 1. Erros de Unidades Orçamentárias e Vínculos (Ex: .VCL, .PAT)"):
