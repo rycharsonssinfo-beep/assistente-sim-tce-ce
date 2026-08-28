@@ -11,6 +11,10 @@ st.set_page_config(
     layout="wide"
 )
 
+# Inicializa o histórico de casos resolvidos na sessão do Streamlit
+if "historico_casos" not in st.session_state:
+    st.session_state["historico_casos"] = []
+
 # Configuração da Chave da API
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
@@ -29,6 +33,9 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 📌 Orientações")
     st.markdown("Utilize este painel para analisar logs de erro, identificando de forma didática a posição e a função de cada campo no layout.")
+    
+    st.markdown("---")
+    st.metric("Casos Salvos no Histórico", len(st.session_state["historico_casos"]))
 
 # ==========================================
 # TELA PRINCIPAL
@@ -37,8 +44,12 @@ st.title("⚖️ Assistente SIM TCE-CE - Diagnóstico Técnico")
 st.markdown("### Central de análise e correção de erros de validação do Tribunal de Contas.")
 st.markdown("---")
 
-# Abas principais
-aba1, aba2 = st.tabs(["🔍 Diagnóstico de Logs e Posições", "💡 Padrões e Referências"])
+# Abas principais atualizadas (incluindo o Histórico de Casos)
+aba1, aba2, aba3 = st.tabs([
+    "🔍 Diagnóstico de Logs e Posições", 
+    "📂 Histórico de Casos Resolvidos", 
+    "💡 Padrões e Referências"
+])
 
 with aba1:
     st.info("Cole abaixo o trecho do relatório de ocorrência do SIM TCE-CE que necessita de análise:")
@@ -51,10 +62,10 @@ with aba1:
                 "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc ) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS."
             )
     with col_btn2:
-        if st.button("📥 Exemplo 2: Erro de Contratos (LCO)"):
+        if st.button("📥 Exemplo 2: Erro de Patrimônio (PAT)"):
             st.session_state["erro_input"] = (
-                "CO202607.LCO - CONTRATOS\n"
-                "Descrição: Gestor responsavel pelo Contrato nao encontrado no cadastro de Ordenadores."
+                "RP202607.PAT - CONTAS REDUTORAS DOS BENS INCORPORADOS AO PATRIMÔNIO DO MUNICÍPIO\n"
+                "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, nu_registro_bem ) que compõe(m) a chave do arquivo BENS_MUNICIPIOS."
             )
     
     user_input = st.text_area(
@@ -82,79 +93,108 @@ with aba1:
 
     if st.button("🚀 Processar Análise", type="primary"):
         if user_input.strip():
-            with st.spinner("Processando diagnóstico detalhado (aguarde caso haja fila de cota)..."):
-                resposta_obtida = None
-                sucesso = False
-                
-                # Lista expandida com múltiplos fallbacks (do mais recente para versões anteriores mais estáveis de cota)
-                modelos_para_tentar = ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
-                
-                prompt = f"""
-                Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE, com foco em uma linguagem simples, clara e didática.
-                Analise o erro de validação de dados abaixo (retirado de relatórios oficiais de ocorrência). 
-                
-                Forneça um diagnóstico estruturado estritamente nas seguintes partes:
-                
-                ### 🎯 Causa Raiz em Linguagem Simples
-                (Explique o motivo da inconsistência de forma descomplicada, traduzindo o que o erro significa na prática para o usuário).
+            # Verifica se o erro já existe no histórico da sessão (Economiza IA/Cota)
+            caso_existente = next((item for item in st.session_state["historico_casos"] if item["erro"].strip() == user_input.strip()), None)
+            
+            if caso_existente:
+                st.markdown("---")
+                st.success("⚡ Diagnóstico recuperado instantaneamente do Histórico (sem gasto de API)!")
+                st.markdown("### 💡 Diagnóstico e Orientação Detalhada")
+                st.markdown(caso_existente["resposta"])
+            else:
+                with st.spinner("Processando diagnóstico detalhado (aguarde caso haja fila de cota)..."):
+                    resposta_obtida = None
+                    sucesso = False
+                    
+                    modelos_para_tentar = ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+                    
+                    prompt = f"""
+                    Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE, com foco em uma linguagem simples, clara e didática.
+                    Analise o erro de validação de dados abaixo (retirado de relatórios oficiais de ocorrência). 
+                    
+                    Forneça um diagnóstico estruturado estritamente nas seguintes partes:
+                    
+                    ### 🎯 Causa Raiz em Linguagem Simples
+                    (Explique o motivo da inconsistência de forma descomplicada, traduzindo o que o erro significa na prática para o usuário).
 
-                ### 📍 Onde Encontrar e O Que Significa Cada Campo
-                (Identifique os campos técnicos citados no erro - como cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc, etc. Explique qual é a função de cada um deles no leiaute e em qual parte/contexto do arquivo eles devem ser conferidos).
+                    ### 📍 Onde Encontrar e O Que Significa Cada Campo
+                    (Identifique os campos técnicos citados no erro - como cd_municipio, dt_versao_orc, cd_orgao, nu_registro_bem, etc. Explique qual é a função de cada um deles no leiaute e em qual parte/contexto do arquivo eles devem ser conferidos).
 
-                ### ✅ Diretrizes Práticas de Correção
-                (Forneça orientações passo a passo claras e diretas de como o usuário deve proceder no sistema de origem ou no arquivo para resolver o problema).
+                    ### ✅ Diretrizes Práticas de Correção
+                    (Forneça orientações passo a passo claras e diretas de como o usuário deve proceder no sistema de origem ou no arquivo para resolver o problema).
 
-                REGRAS OBRIGATÓRIAS:
-                - Use uma linguagem amigável, didática e de fácil compreensão.
-                - NUNCA invente nomes de módulos ou telas de ERP. 
-                - NÃO utilize scripts SQL ou comandos de banco de dados.
-                - Certifique-se de concluir a resposta inteira sem cortes.
+                    REGRAS OBRIGATÓRIAS:
+                    - Use uma linguagem amigável, didática e de fácil compreensão.
+                    - NUNCA invente nomes de módulos ou telas de ERP. 
+                    - NÃO utilize scripts SQL ou comandos de banco de dados.
+                    - Certifique-se de concluir a resposta inteira sem cortes.
 
-                Erro reportado:
-                {user_input}
-                """
-                
-                # Loop de tentativa com fallback e pausa inteligente (backoff)
-                for nome_modelo in modelos_para_tentar:
-                    tentativas = 2  # Tenta até 2 vezes por modelo com intervalo
-                    for tentativa in range(tentativas):
-                        try:
-                            model = genai.GenerativeModel(nome_modelo)
-                            response = model.generate_content(prompt, generation_config={"temperature": 0.2, "max_output_tokens": 4096})
-                            if response and response.text:
-                                resposta_obtida = response.text
-                                sucesso = True
-                                break
-                        except Exception as err:
-                            erro_str = str(err).lower()
-                            # Se estourou cota (429 / quota), aguarda alguns segundos e tenta novamente
-                            if "429" in erro_str or "quota" in erro_str:
-                                time.sleep(3 * (tentativa + 1))  # Pausa progressiva (3s, depois 6s)
-                                continue
-                            else:
-                                break  # Outros erros pulam para o próximo modelo
-                    if sucesso:
-                        break
+                    Erro reportado:
+                    {user_input}
+                    """
+                    
+                    for nome_modelo in modelos_para_tentar:
+                        tentativas = 2
+                        for tentativa in range(tentativas):
+                            try:
+                                model = genai.GenerativeModel(nome_modelo)
+                                response = model.generate_content(prompt, generation_config={"temperature": 0.2, "max_output_tokens": 4096})
+                                if response and response.text:
+                                    resposta_obtida = response.text
+                                    sucesso = True
+                                    break
+                            except Exception as err:
+                                erro_str = str(err).lower()
+                                if "429" in erro_str or "quota" in erro_str:
+                                    time.sleep(3 * (tentativa + 1))
+                                    continue
+                                else:
+                                    break
+                        if sucesso:
+                            break
 
-                if sucesso and resposta_obtida:
-                    st.markdown("---")
-                    st.success("Análise concluída com sucesso!")
-                    st.markdown("### 💡 Diagnóstico e Orientação Detalhada")
-                    st.markdown(resposta_obtida)
-                else:
-                    st.error("⚠️ O limite de requisições gratuitas da API foi atingido (Erro 429). O sistema tentou modelos alternativos, mas todos retornaram sobrecarga momentânea.")
-                    st.info("💡 **Dica:** Aguarde aproximadamente 30 segundos antes de tentar processar um novo log novamente.")
+                    if sucesso and resposta_obtida:
+                        # Salva automaticamente no histórico da sessão
+                        st.session_state["historico_casos"].append({
+                            "erro": user_input.strip(),
+                            "resposta": resposta_obtida
+                        })
+                        
+                        st.markdown("---")
+                        st.success("Análise concluída com sucesso e salva no Histórico!")
+                        st.markdown("### 💡 Diagnóstico e Orientação Detalhada")
+                        st.markdown(resposta_obtida)
+                    else:
+                        st.error("⚠️ O limite de requisições gratuitas da API foi atingido (Erro 429). O sistema tentou modelos alternativos, mas todos retornaram sobrecarga momentânea.")
+                        st.info("💡 **Dica:** Aguarde aproximadamente 30 segundos ou consulte a aba **Histórico de Casos Resolvidos** caso este erro já tenha sido solucionado antes.")
         else:
             st.warning("⚠️ Por favor, insira ou carregue um texto de erro antes de processar a análise.")
 
 with aba2:
+    st.subheader("📂 Casos Anteriores Resolvidos")
+    st.markdown("Esta aba armazena os erros já pesquisados anteriormente nesta sessão. Clique em um caso para relembrar a solução instantaneamente sem gastar novas requisições da IA.")
+
+    if not st.session_state["historico_casos"]:
+        st.info("Nenhum caso foi pesquisado e salvo nesta sessão ainda. Utilize a aba de Diagnóstico para começar.")
+    else:
+        for idx, caso in enumerate(st.session_state["historico_casos"]):
+            # Cria um resumo limpo para o título do expander
+            titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:60]
+            with st.expander(f"Caso #{idx+1}: {titulo_resumo}"):
+                st.markdown(f"**Log Original:**\n> {caso['erro']}")
+                st.markdown("---")
+                st.markdown(caso["resposta"])
+
+with aba3:
     st.subheader("📚 Guia Prático e Base de Conhecimento SIM 2026")
-    st.markdown("Consulte abaixo o catálogo detalhado com os erros mais frequentes, a função dos campos técnicos envolvidos e o passo a passo para a correção.")
+    
+    # Campo de busca rápida na base de conhecimento
+    termo_busca = st.text_input("🔍 Pesquisar na base de conhecimento:", placeholder="Digite ex: 'Veículos', 'Contratos', 'Patrimônio'...").lower()
 
     with st.expander("🏛️ 1. Erros de Unidades Orçamentárias e Vínculos (Ex: .VCL, .PAT)"):
         st.markdown("""
         * **Ocorrência Comum no Log:**  
-          *Não há relação com o(s) campo(s) (cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS.*
+          *Não há relação com o(s) campo(s) ( cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc ) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS.*
         
         * **O que significam os campos envolvidos?**
           * `cd_municipio`: Código oficial do município regulado pelo IBGE.
