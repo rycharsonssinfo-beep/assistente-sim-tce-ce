@@ -9,7 +9,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM (CSS)
+# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM (CARDS E BLOCOS)
 # ==========================================
 st.set_page_config(
     page_title="Assistente SIM TCE-CE",
@@ -19,13 +19,13 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Cores Globais e Tipografia Base */
     :root {
-        --bg-main: #F8FAFC;
+        --bg-main: #F4F6F9;
         --surface: #FFFFFF;
+        --border-color: #CBD5E1;
         --border-subtle: #E2E8F0;
         --text-main: #0F172A;
-        --text-secondary: #475569;
+        --text-secondary: #334155;
         --text-muted: #64748B;
         --primary: #0284C7;
         --primary-hover: #0369A1;
@@ -36,31 +36,29 @@ st.markdown("""
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
-    /* Ocultar elementos padrão excessivos do Streamlit se necessário, mantendo a limpeza */
     .block-container {
         padding-top: 2rem;
         padding-bottom: 3rem;
         max-width: 1200px;
     }
 
-    /* Tipografia e Cabeçalhos */
-    h1, h2, h3 {
+    h1, h2, h3, h4 {
         color: var(--text-main);
         font-weight: 600;
         letter-spacing: -0.025em;
     }
-    
+
     /* Estilização Moderna de Abas (Tabs) */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: transparent;
-        border-bottom: 1px solid var(--border-subtle);
-        padding-bottom: 0px;
+        gap: 6px;
+        background-color: #E2E8F0;
+        padding: 4px;
+        border-radius: 8px;
     }
     .stTabs [data-baseweb="tab"] {
-        height: 42px;
+        height: 38px;
         background-color: transparent;
-        border-radius: 6px 6px 0 0;
+        border-radius: 6px;
         color: var(--text-secondary);
         font-weight: 500;
         font-size: 14px;
@@ -70,51 +68,79 @@ st.markdown("""
     .stTabs [aria-selected="true"] {
         background-color: var(--surface) !important;
         color: var(--primary) !important;
-        border: 1px solid var(--border-subtle);
-        border-bottom: 1px solid var(--surface);
         font-weight: 600;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
-    /* Cartões e Containers Sutis */
-    .element-container, .stMarkdown {
+    /* Cartões e Blocos com Contornos Fortes */
+    div.stMarkdownContainer, .element-container {
         color: var(--text-main);
     }
 
-    /* Botões Principais e Secundários */
+    /* Estilização personalizada para simular Cards de Conteúdo */
+    .card-container {
+        background-color: var(--surface);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 24px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        margin-bottom: 20px;
+    }
+
+    /* Botões */
     .stButton button {
         border-radius: 6px;
         font-weight: 500;
         font-size: 14px;
+        border: 1px solid var(--border-color);
+        background-color: var(--surface);
+        color: var(--text-secondary);
         transition: all 0.15s ease;
     }
+    .stButton button:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
 
-    /* Ajustes finos em Inputs e Textareas */
+    /* Botão Primário em Destaque */
+    .stButton button[kind="primary"] {
+        background-color: var(--primary);
+        color: white;
+        border: none;
+    }
+    .stButton button[kind="primary"]:hover {
+        background-color: var(--primary-hover);
+        color: white;
+    }
+
+    /* Inputs e Textareas */
     .stTextArea textarea, .stTextInput input {
-        border-radius: 6px !important;
-        border-color: var(--border-subtle) !important;
+        border-radius: 8px !important;
+        border-color: var(--border-color) !important;
         background-color: var(--surface) !important;
         color: var(--text-main) !important;
     }
     .stTextArea textarea:focus, .stTextInput input:focus {
         border-color: var(--primary) !important;
-        box-shadow: 0 0 0 1px var(--primary) !important;
+        box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important;
     }
 
-    /* Sidebar Profissional e Discreta */
+    /* Sidebar Estruturada */
     section[data-testid="stSidebar"] {
-        background-color: #F1F5F9;
-        border-right: 1px solid var(--border-subtle);
+        background-color: #EBF2F7;
+        border-right: 1px solid var(--border-color);
     }
     section[data-testid="stSidebar"] .block-container {
         padding-top: 1.5rem;
     }
 
-    /* Expander Moderno */
+    /* Expanders com Bordas Mais Nítidas */
     div[data-testid="stExpander"] {
         background-color: var(--surface);
-        border: 1px solid var(--border-subtle);
-        border-radius: 6px;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        margin-bottom: 12px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -208,7 +234,7 @@ else:
     genai.configure(api_key=api_key)
 
 # ==========================================
-# 4. BARRA LATERAL (SIDEBAR REORGANIZADA E LIMPA)
+# 4. BARRA LATERAL (SIDEBAR COM BLOCOS)
 # ==========================================
 with st.sidebar:
     st.markdown("### SIM TCE-CE")
@@ -216,11 +242,11 @@ with st.sidebar:
     st.markdown("---")
     
     st.markdown("**Sobre a Ferramenta**")
-    st.markdown("<span style='font-size: 13px; color: #475569;'>Plataforma com busca semântica, feedback de utilidade e persistência SQLite para apoio na validação de layouts.</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size: 13px; color: #334155;'>Plataforma com busca semântica, feedback de utilidade e persistência SQLite para apoio na validação de layouts.</span>", unsafe_allow_html=True)
     
     st.markdown("---")
     st.markdown("**Base Permanente**")
-    st.markdown(f"<span style='font-size: 20px; font-weight: 600; color: #0F172A;'>{len(st.session_state['historico_casos'])}</span> <span style='font-size: 13px; color: #64748B;'>casos armazenados</span>", unsafe_allow_html=True)
+    st.markdown(f"<div style='background: white; border: 1px solid #CBD5E1; padding: 10px 14px; border-radius: 6px; margin-top: 6px;'><span style='font-size: 18px; font-weight: 700; color: #0F172A;'>{len(st.session_state['historico_casos'])}</span> <span style='font-size: 13px; color: #64748B;'>casos armazenados</span></div>", unsafe_allow_html=True)
     
     st.markdown("---")
     st.markdown("**Backup e Restauração**")
@@ -257,7 +283,7 @@ with st.sidebar:
 # 5. TELA PRINCIPAL E ABAS
 # ==========================================
 st.markdown("### Assistente de Diagnóstico SIM TCE-CE")
-st.markdown("<span style='color: #475569; font-size: 15px;'>Central inteligente de análise de consistências, tradução de logs e consulta de orientações técnicas.</span>", unsafe_allow_html=True)
+st.markdown("<span style='color: #334155; font-size: 15px;'>Central inteligente de análise de consistências, tradução de logs e consulta de orientações técnicas.</span>", unsafe_allow_html=True)
 st.markdown("---")
 
 aba1, aba2, aba3 = st.tabs([
@@ -270,10 +296,10 @@ aba1, aba2, aba3 = st.tabs([
 # ABA 1: DIAGNÓSTICO E ENTRADA DE LOGS
 # ------------------------------------------
 with aba1:
+    st.markdown("")
     st.markdown("##### Entrada de Dados do Relatório de Ocorrência")
-    st.markdown("<span style='font-size: 13px; color: #64748B;'>Cole abaixo o trecho do relatório de ocorrência do PGI/SIM TCE-CE para gerar o diagnóstico técnico.</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size: 13px; color: #475569;'>Cole abaixo o trecho do relatório de ocorrência do PGI/SIM TCE-CE para gerar o diagnóstico técnico.</span>", unsafe_allow_html=True)
     
-    # Exemplos rápidos estilizados como ações discretas
     col_ex1, col_ex2, col_space = st.columns([1, 1, 2])
     with col_ex1:
         if st.button("Exemplo: Veículos (.VCL)", use_container_width=True):
@@ -291,7 +317,7 @@ with aba1:
     user_input = st.text_area(
         "Relatório de Erro",
         value=st.session_state.get("erro_input", ""),
-        height=140,
+        height=150,
         placeholder="Cole o trecho do erro aqui..."
     )
 
@@ -301,15 +327,16 @@ with aba1:
         
         badges_html = "<div style='display: flex; gap: 8px; margin: 12px 0 16px 0; flex-wrap: wrap; align-items: center;'>"
         if encontrou_ext:
-            badges_html += f"<span style='background-color: #E0F2FE; color: #0369A1; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; border: 1px solid #BAE6FD;'>Módulo: {encontrou_ext[0][0].upper()}</span>"
+            badges_html += f"<span style='background-color: #E0F2FE; color: #0369A1; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #7DD3FC;'>Módulo: {encontrou_ext[0][0].upper()}</span>"
         if encontrou_campos:
             amostra_campos = ", ".join(set(encontrou_campos[:4]))
-            badges_html += f"<span style='background-color: #FEF3C7; color: #B45309; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; border: 1px solid #FDE68A;'>Chaves: {amostra_campos}</span>"
+            badges_html += f"<span style='background-color: #FEF3C7; color: #B45309; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #FCD34D;'>Chaves: {amostra_campos}</span>"
         badges_html += "</div>"
             
         if encontrou_ext or encontrou_campos:
             st.markdown(badges_html, unsafe_allow_html=True)
 
+    st.markdown("")
     if st.button("Processar Análise Técnica", type="primary", use_container_width=True):
         if user_input.strip():
             texto_limpo = user_input.strip()
@@ -325,7 +352,7 @@ with aba1:
                     st.markdown("---")
                     st.success("Diagnóstico recuperado instantaneamente do Banco de Dados Permanente.")
                     st.markdown("##### Diagnóstico e Orientação Técnica")
-                    st.markdown(caso_existente["resposta"])
+                    st.markdown(f"<div style='background: white; border: 1px solid #CBD5E1; border-radius: 8px; padding: 24px; margin-top: 12px;'>{caso_existente['resposta']}</div>", unsafe_allow_html=True)
                 else:
                     with st.spinner("Analisando leiaute e consultando diretrizes de suporte..."):
                         resposta_obtida = None
@@ -385,7 +412,7 @@ with aba1:
                             st.markdown("---")
                             st.success("Análise concluída com sucesso e gravada no Banco de Dados SQLite.")
                             st.markdown("##### Diagnóstico e Orientação Técnica")
-                            st.markdown(resposta_obtida)
+                            st.markdown(f"<div style='background: white; border: 1px solid #CBD5E1; border-radius: 8px; padding: 24px; margin-top: 12px;'>{resposta_obtida}</div>", unsafe_allow_html=True)
                         else:
                             st.error("O limite de requisições gratuitas da API foi atingido (Erro 429). O sistema tentou modelos alternativos, mas todos retornaram sobrecarga momentânea.")
                             st.info("Dica: Aguarde alguns segundos ou pesquise na aba Histórico Permanente se este caso já foi solucionado anteriormente.")
@@ -396,8 +423,9 @@ with aba1:
 # ABA 2: HISTÓRICO COM BUSCA SEMÂNTICA E FEEDBACK
 # ------------------------------------------
 with aba2:
+    st.markdown("")
     st.markdown("##### Repositório de Casos Resolvidos")
-    st.markdown("<span style='font-size: 13px; color: #64748B;'>Consulte os casos salvos utilizando busca inteligente por similaridade e avalie a utilidade das respostas.</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size: 13px; color: #475569;'>Consulte os casos salvos utilizando busca inteligente por similaridade e avalie a utilidade das respostas.</span>", unsafe_allow_html=True)
     st.markdown("")
 
     if not st.session_state["historico_casos"]:
@@ -433,23 +461,22 @@ with aba2:
         if not casos_filtrados:
             st.warning("Nenhum caso correspondente encontrado na base permanente com este critério.")
         else:
-            st.markdown(f"<span style='font-size: 13px; color: #64748B;'>Exibindo <b>{len(casos_filtrados)}</b> de <b>{len(casos_atuais)}</b> registro(s)</span>", unsafe_allow_html=True)
+            st.markdown(f"<span style='font-size: 13px; color: #475569;'>Exibindo <b>{len(casos_filtrados)}</b> de <b>{len(casos_atuais)}</b> registro(s)</span>", unsafe_allow_html=True)
             st.markdown("")
             
             for idx, caso in enumerate(casos_filtrados):
-                # Badges de status discretos
                 if caso['feedback'] == 1:
-                    status_badge = "<span style='background-color: #DCFCE7; color: #166534; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;'>Aprovado</span>"
+                    status_badge = "<span style='background-color: #DCFCE7; color: #166534; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid #BBF7D0;'>Aprovado</span>"
                 elif caso['feedback'] == -1:
-                    status_badge = "<span style='background-color: #FEF2F2; color: #991B1B; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;'>Requer atenção</span>"
+                    status_badge = "<span style='background-color: #FEF2F2; color: #991B1B; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid #FECACA;'>Requer atenção</span>"
                 else:
-                    status_badge = "<span style='background-color: #F1F5F9; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;'>Não avaliado</span>"
+                    status_badge = "<span style='background-color: #F1F5F9; color: #475569; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid #E2E8F0;'>Não avaliado</span>"
                 
                 titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:65]
                 
                 with st.expander(f"Caso #{caso['id']} — {titulo_resumo}  |  {status_badge}"):
                     st.markdown("**Log Registrado:**")
-                    st.markdown(f"> {caso['erro']}")
+                    st.markdown(f"<div style='background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 13px;'>{caso['erro']}</div>", unsafe_allow_html=True)
                     st.markdown("---")
                     st.markdown(caso["resposta"])
                     st.markdown("---")
@@ -469,17 +496,19 @@ with aba2:
                             st.rerun()
                     with col_fb3:
                         status_atual_txt = "Aprovado pela equipe" if caso['feedback'] == 1 else ("Requer atenção" if caso['feedback'] == -1 else "Ainda não avaliado")
-                        st.markdown(f"<span style='font-size: 12px; color: #64748B; line-height: 2.2;'>Curadoria: <b>{status_atual_txt}</b></span>", unsafe_allow_html=True)
+                        st.markdown(f"<span style='font-size: 12px; color: #475569; line-height: 2.2;'>Curadoria: <b>{status_atual_txt}</b></span>", unsafe_allow_html=True)
 
 # ------------------------------------------
 # ABA 3: BASE DE CONHECIMENTO E REFERÊNCIAS
 # ------------------------------------------
 with aba3:
+    st.markdown("")
     st.markdown("##### Base de Conhecimento e Padrões SIM 2026")
-    st.markdown("<span style='font-size: 13px; color: #64748B;'>Consulte os guias rápidos e manuais de orientação técnica organizados por módulos.</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size: 13px; color: #475569;'>Consulte os guias rápidos e manuais de orientação técnica organizados por módulos.</span>", unsafe_allow_html=True)
     st.markdown("")
     
     termo_busca = st.text_input("Filtrar guias de referência", placeholder="Digite ex: 'Veículos', 'Contratos', 'Patrimônio'...").lower()
+    st.markdown("")
 
     with st.expander("🏛️ Erros de Unidades Orçamentárias e Vínculos (Ex: .VCL, .PAT)"):
         st.markdown("""
@@ -526,7 +555,7 @@ with aba3:
 
     with st.expander("📌 Guia Rápido: Como Ler os Campos nas Linhas dos Arquivos"):
         st.markdown("""
-        Se precisar analisar um arquivo texto (`.dat` ou `.txt`) linha por linha, lembre-se de que os dados são separados por **vírgulas e entre aspas**:
+        * Se precisar analisar um arquivo texto (`.dat` ou `.txt`) linha por linha, lembre-se de que os dados são separados por **vírgulas e entre aspas**:
         * **Primeiras colunas:** Geralmente identificam o código do órgão e o tipo de registro/layout.
         * **Colunas centrais:** Costumam abrigar datas (no formato `AAAAMMDD`) e chaves principais (CPFs, CNPJs ou números de processos).
         * **Últimas colunas:** Geralmente traz valores numéricos e a competência de referência (no formato `AAAAMM`).
