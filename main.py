@@ -48,7 +48,6 @@ st.markdown("""
         letter-spacing: -0.025em;
     }
 
-    /* Estilização Moderna de Abas (Tabs) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 6px;
         background-color: #E2E8F0;
@@ -72,7 +71,6 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
-    /* Botões */
     .stButton button {
         border-radius: 6px;
         font-weight: 500;
@@ -97,7 +95,6 @@ st.markdown("""
         color: white;
     }
 
-    /* Inputs e Textareas */
     .stTextArea textarea, .stTextInput input {
         border-radius: 8px !important;
         border-color: var(--border-color) !important;
@@ -109,7 +106,6 @@ st.markdown("""
         box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important;
     }
 
-    /* Sidebar Estruturada */
     section[data-testid="stSidebar"] {
         background-color: #EBF2F7;
         border-right: 1px solid var(--border-color);
@@ -118,7 +114,6 @@ st.markdown("""
         padding-top: 1.5rem;
     }
 
-    /* Expanders com Bordas Mais Nítidas */
     div[data-testid="stExpander"] {
         background-color: var(--surface);
         border: 1px solid var(--border-color);
@@ -245,8 +240,18 @@ if "historico_casos" not in st.session_state:
     st.session_state["historico_casos"] = carregar_historico_db()
 
 # ==========================================
-# 3. UTILITÁRIOS DE NORMALIZAÇÃO E CLASSIFICAÇÃO
+# 3. UTILITÁRIOS DE EXTRAÇÃO E CLASSIFICAÇÃO
 # ==========================================
+def extrair_titulo_erro(texto):
+    """Extrai o título descritivo que costuma vir logo após o hífen ou o nome do arquivo (ex: DESTINAÇÃO DE VEÍCULOS)."""
+    if not texto:
+        return ""
+    # Procura padrão como 'ARQUIVO.VCL - TÍTULO DO ERRO'
+    match = re.search(r'\.[A-Z0-9]+\s*-\s*([^\n]+)', texto, re.IGNORECASE)
+    if match:
+        return match.group(1).strip().lower()
+    return ""
+
 def normalizar_texto(texto):
     if not texto:
         return ""
@@ -285,11 +290,11 @@ def classificar_erro(texto):
     return arquivo_sigla, modulo
 
 # ==========================================
-# 4. BASE DE CONHECIMENTO EXTERNALIZADA (JSON/ESTRUTURADA)
+# 4. BASE DE CONHECIMENTO EXTERNALIZADA
 # ==========================================
 BASE_CONHECIMENTO_PADRAO = [
     {
-        "chaves": ["unidades_orcamentarias", "cd_municipio", "dt_versao_orc", "cd_orgao", "cd_unid_orc", ".vcl", ".pat"],
+        "chaves": ["unidades_orcamentarias", "cd_municipio", "dt_versao_orc", "cd_orgao", "cd_unid_orc", ".vcl", ".pat", "destinação de veículos"],
         "titulo": "Erros de Unidades Orçamentárias e Vínculos",
         "resposta": """### 🎯 Causa Raiz em Linguagem Simples
 O sistema SIM/TCE-CE exige que os arquivos de movimentação (como veículos ou patrimônio) estejam vinculados a uma unidade orçamentária válida e previamente cadastrada na competência orçamentária oficial.
@@ -331,6 +336,7 @@ Verifique se houve substituição de gestor não informada nas remessas de agent
 
 def buscar_na_base_conhecimento(texto_erro):
     t_norm = normalizar_texto(texto_erro)
+    titulo_extraido = extrair_titulo_erro(texto_erro)
     melhor_match = None
     max_pontos = 0
     
@@ -338,7 +344,11 @@ def buscar_na_base_conhecimento(texto_erro):
         pontos = 0
         for chave in item["chaves"]:
             if chave.lower() in t_norm:
-                pontos += 1
+                # Dá peso extra se a chave bater com o título extraído do erro
+                if titulo_extraido and chave.lower() in titulo_extraido:
+                    pontos += 3
+                else:
+                    pontos += 1
         if pontos > max_pontos:
             max_pontos = pontos
             melhor_match = item
@@ -348,7 +358,7 @@ def buscar_na_base_conhecimento(texto_erro):
     return None, None
 
 # ==========================================
-# 5. BUSCA HÍBRIDA E INTELIGENTE NO HISTÓRICO
+# 5. BUSCA HÍBRIDA E INTELIGENTE NO HISTÓRICO (COM PESO NO TÍTULO)
 # ==========================================
 def buscar_caso_no_historico(texto_entrada):
     historico = st.session_state["historico_casos"]
@@ -356,11 +366,14 @@ def buscar_caso_no_historico(texto_entrada):
         return None, "Nenhum", 0.0
         
     texto_norm = normalizar_texto(texto_entrada)
+    titulo_entrada = extrair_titulo_erro(texto_entrada)
     
+    # 1. Busca Exata Normalizada
     for caso in historico:
         if normalizar_texto(caso["erro"]) == texto_norm:
             return caso, "Exata", 1.0
             
+    # 2. Busca Semântica com Priorização de Título Igual
     corpus = [normalizar_texto(c["erro"]) for c in historico]
     corpus.append(texto_norm)
     
@@ -377,8 +390,13 @@ def buscar_caso_no_historico(texto_entrada):
         
         for idx, sim in enumerate(similaridades):
             caso = historico[idx]
+            titulo_historico = extrair_titulo_erro(caso["erro"])
+            
+            # Bônus forte se o título descritivo (ex: DESTINAÇÃO DE VEÍCULOS) for idêntico
+            bonus_titulo = 0.30 if (titulo_entrada and titulo_historico and titulo_entrada == titulo_historico) else 0.0
             bonus_feedback = 0.15 if caso.get("validado", 0) == 1 else 0.0
-            pontuacao_final = sim + bonus_feedback
+            
+            pontuacao_final = sim + bonus_titulo + bonus_feedback
             
             if pontuacao_final > maior_pontuacao:
                 maior_pontuacao = pontuacao_final
@@ -466,7 +484,7 @@ with st.sidebar:
     st.markdown("---")
     
     st.markdown("**Sobre a Ferramenta**")
-    st.markdown("<span style='font-size: 13px; color: #334155;'>Plataforma inteligente com busca híbrida, curadoria de conhecimento validado e persistência SQLite.</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size: 13px; color: #334155;'>Plataforma inteligente com busca híbrida baseada em títulos e módulos, curadoria de conhecimento validado e persistência SQLite.</span>", unsafe_allow_html=True)
     
     st.markdown("---")
     st.markdown("**Base Permanente**")
@@ -554,11 +572,14 @@ with aba1:
 
     if user_input.strip():
         sigla_arq, modulo_identificado = classificar_erro(user_input)
+        titulo_extraido = extrair_titulo_erro(user_input)
         encontrou_campos = re.findall(r'cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+', user_input, re.IGNORECASE)
         
         badges_html = "<div style='display: flex; gap: 8px; margin: 12px 0 16px 0; flex-wrap: wrap; align-items: center;'>"
         if sigla_arq:
             badges_html += f"<span style='background-color: #E0F2FE; color: #0369A1; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #7DD3FC;'>Módulo: {modulo_identificado} (.</span><span style='background-color: #E0F2FE; color: #0369A1; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #7DD3FC;'>{sigla_arq})</span>"
+        if titulo_extraido:
+            badges_html += f"<span style='background-color: #F1F5F9; color: #334155; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #CBD5E1;'>Título: {titulo_extraido.title()}</span>"
         if encontrou_campos:
             amostra_campos = ", ".join(set(encontrou_campos[:4]))
             badges_html += f"<span style='background-color: #FEF3C7; color: #B45309; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #FCD34D;'>Chaves: {amostra_campos}</span>"
@@ -582,7 +603,7 @@ with aba1:
             
             if not resposta_obtida:
                 caso_encontrado, tipo_match, score = buscar_caso_no_historico(texto_limpo)
-                if caso_encontrado and (tipo_match in ["Exata", "Validado e Semelhante"] or score >= 0.70):
+                if caso_encontrado and (tipo_match in ["Exata", "Validado e Semelhante"] or score >= 0.60):
                     resposta_obtida = caso_encontrado["resposta"]
                     confianca_obtida = caso_encontrado.get("confianca", "Alta" if tipo_match=="Exata" else "Média")
                     origem_resposta = f"Histórico Permanente ({tipo_match})"
@@ -611,7 +632,6 @@ with aba1:
                 cor_conf = "#166534" if confianca_obtida == "Alta" else ("#B45309" if confianca_obtida == "Média" else "#991B1B")
                 bg_conf = "#DCFCE7" if confianca_obtida == "Alta" else ("#FEF3C7" if confianca_obtida == "Média" else "#FEF2F2")
                 
-                # Cabeçalho do Card separado do conteúdo para evitar conflito com Streamlit containers
                 st.markdown(f"""
                     <div style='display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #CBD5E1; border-radius: 8px 8px 0 0; padding: 14px 24px; border-bottom: none;'>
                         <span style='font-weight: 600; color: #0F172A;'>Diagnóstico e Orientação Técnica</span>
@@ -619,7 +639,6 @@ with aba1:
                     </div>
                 """, unsafe_allow_html=True)
                 
-                # Conteúdo markdown renderizado nativamente de forma limpa pelo Streamlit
                 with st.container():
                     st.markdown(f"""
                     <div style='background: white; border: 1px solid #CBD5E1; border-top: none; border-radius: 0 0 8px 8px; padding: 24px; margin-top: -10px; margin-bottom: 20px;'>
