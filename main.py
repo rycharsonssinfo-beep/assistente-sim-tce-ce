@@ -2,8 +2,11 @@ import os
 import re
 import json
 import time
+import sqlite3
 import streamlit as st
 import google.generativeai as genai
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # ==========================================
 # 1. CONFIGURAÇÃO DA PÁGINA E ESTILO VISUAL
@@ -14,21 +17,15 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilização CSS personalizada para dar um ar corporativo e moderno
 st.markdown("""
     <style>
-    /* Estilização geral e fontes */
     .main {
         background-color: #F8FAFC;
     }
-    
-    /* Cabeçalhos estilizados */
     h1, h2, h3 {
         color: #0F172A;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    
-    /* Cartões de métricas e blocos institucionais */
     .stMetric {
         background-color: #FFFFFF;
         padding: 15px;
@@ -36,8 +33,6 @@ st.markdown("""
         border: 1px solid #E2E8F0;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    
-    /* Ajustes em blocos de código/logs */
     blockquote {
         border-left: 4px solid #0284C7;
         background-color: #F1F5F9;
@@ -49,31 +44,89 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. PERSISTÊNCIA DE DADOS (ARQUIVO JSON)
+# 2. PERSISTÊNCIA ROBUSTA (SQLITE + FEEDBACK)
 # ==========================================
-ARQUIVO_HISTORICO = "historico_sim_tce.json"
+NOME_BANCO = "banco_sim_tce.db"
 
-def carregar_historico():
-    """Carrega o histórico salvo do arquivo JSON de forma segura."""
-    if os.path.exists(ARQUIVO_HISTORICO):
-        try:
-            with open(ARQUIVO_HISTORICO, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+def inicializar_banco():
+    """Cria a tabela de casos resolvidos com coluna de feedback se não existir."""
+    conn = sqlite3.connect(NOME_BANCO)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS casos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            erro TEXT UNIQUE,
+            resposta TEXT,
+            feedback INTEGER DEFAULT 0
+        )
+    """)
+    # Garante compatibilidade caso a tabela antiga não tenha a coluna feedback
+    cursor.execute("PRAGMA table_info(casos)")
+    colunas = [col[1] for col in cursor.fetchall()]
+    if "feedback" not in colunas:
+        cursor.execute("ALTER TABLE casos ADD COLUMN feedback INTEGER DEFAULT 0")
+    conn.commit()
+    conn.close()
 
-def salvar_historico(historico):
-    """Salva a lista de histórico permanentemente no arquivo JSON."""
+def carregar_historico_db():
+    """Carrega todos os casos salvos no banco SQLite."""
+    inicializar_banco()
+    conn = sqlite3.connect(NOME_BANCO)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, erro, resposta, feedback FROM casos ORDER BY id DESC")
+    dados = cursor.fetchall()
+    conn.close()
+    return [{"id": row[0], "erro": row[1], "resposta": row[2], "feedback": row[3]} for row in dados]
+
+def salvar_caso_db(erro, resposta):
+    """Insere um novo caso no banco SQLite."""
+    inicializar_banco()
+    conn = sqlite3.connect(NOME_BANCO)
+    cursor = conn.cursor()
     try:
-        with open(ARQUIVO_HISTORICO, "w", encoding="utf-8") as f:
-            json.dump(historico, f, ensure_ascii=False, indent=4)
+        cursor.execute("INSERT OR IGNORE INTO casos (erro, resposta, feedback) VALUES (?, ?, 0)", (erro, resposta))
+        conn.commit()
     except Exception as e:
-        print(f"Erro ao salvar histórico: {e}")
+        print(f"Erro ao inserir no banco: {e}")
+    finally:
+        conn.close()
 
-# Inicializa o histórico na sessão do Streamlit
+def atualizar_feedback_db(caso_id, novo_valor):
+    """Atualiza o feedback (1 para útil, -1 para não útil) de um caso."""
+    inicializar_banco()
+    conn = sqlite3.connect(NOME_BANCO)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE casos SET feedback = ? WHERE id = ?", (novo_valor, caso_id))
+    conn.commit()
+    conn.close()
+
+def exportar_base_json():
+    """Exporta registros do banco para JSON (sem expor IDs internos se preferir)."""
+    historico = carregar_historico_db()
+    dados_limpos = [{"erro": item["erro"], "resposta": item["resposta"], "feedback": item["feedback"]} for item in historico]
+    return json.dumps(dados_limpos, ensure_ascii=False, indent=4)
+
+def importar_base_json(arquivo_carregado):
+    """Importa e mescla dados de um arquivo JSON externo."""
+    try:
+        conteudo = json.load(arquivo_carregado)
+        if isinstance(conteudo, list):
+            inicializar_banco()
+            conn = sqlite3.connect(NOME_BANCO)
+            cursor = conn.cursor()
+            for item in conteudo:
+                if "erro" in item and "resposta" in item:
+                    fb = item.get("feedback", 0)
+                    cursor.execute("INSERT OR IGNORE INTO casos (erro, resposta, feedback) VALUES (?, ?, ?)", (item["erro"], item["resposta"], fb))
+            conn.commit()
+            conn.close()
+            return True
+    except Exception as e:
+        print(f"Erro na importação: {e}")
+    return False
+
 if "historico_casos" not in st.session_state:
-    st.session_state["historico_casos"] = carregar_historico()
+    st.session_state["historico_casos"] = carregar_historico_db()
 
 # ==========================================
 # 3. CONFIGURAÇÃO DA API GEMINI
@@ -94,14 +147,36 @@ with st.sidebar:
     st.markdown("---")
     
     st.markdown("**📌 Sobre a Ferramenta**")
-    st.markdown("Plataforma desenvolvida para auxílio na validação, leitura de relatórios de ocorrência e correção de layouts do Tribunal de Contas.")
+    st.markdown("Plataforma com busca semântica, feedback de utilidade e persistência SQLite para apoio na validação de layouts.")
     
     st.markdown("---")
-    # Métrica corporativa
     st.metric(label="Casos na Base Permanente", value=len(st.session_state["historico_casos"]))
     
     st.markdown("---")
-    st.caption("Desenvolvido para otimização de rotinas contábeis e prestação de contas.")
+    st.markdown("### 💾 Gestão da Base (Backup)")
+    
+    dados_json_str = exportar_base_json()
+    st.download_button(
+        label="📥 Baixar Base (.JSON)",
+        data=dados_json_str,
+        file_name="backup_base_sim_tce.json",
+        mime="application/json",
+        use_container_width=True,
+        help="Baixe todos os casos salvos para backup de segurança."
+    )
+    
+    arquivo_submetido = st.file_uploader("📤 Restaurar Base (.JSON)", type=["json"])
+    if arquivo_submetido is not None:
+        if st.button("🔄 Confirmar Importação", use_container_width=True):
+            if importar_base_json(arquivo_submetido):
+                st.session_state["historico_casos"] = carregar_historico_db()
+                st.success("Base de conhecimento restaurada com sucesso!")
+                st.rerun()
+            else:
+                st.error("Erro ao processar o arquivo JSON enviado.")
+
+    st.markdown("---")
+    st.caption("Desenvolvido para otimização de rotinas contábeis.")
 
 # ==========================================
 # 5. TELA PRINCIPAL E ABAS
@@ -110,7 +185,6 @@ st.title("Assistente de Diagnóstico SIM TCE-CE")
 st.markdown("Central inteligente de análise de consistências, tradução de logs e consulta de orientações técnicas.")
 st.markdown("---")
 
-# Abas principais estruturadas
 aba1, aba2, aba3 = st.tabs([
     "🔍 Diagnóstico Inteligente", 
     "📂 Histórico Permanente", 
@@ -124,8 +198,6 @@ with aba1:
     st.markdown("#### 📥 Entrada de Dados do Relatório de Ocorrência")
     st.info("Cole abaixo o trecho do relatório de ocorrência do PGI/SIM TCE-CE para gerar o diagnóstico técnico.")
     
-    # Atalhos rápidos estilizados
-    st.markdown("**Testar com exemplos comuns:**")
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         if st.button("🚗 Exemplo: Veículos (.VCL)", use_container_width=True):
@@ -147,7 +219,6 @@ with aba1:
         placeholder="Cole o trecho do erro aqui..."
     )
 
-    # Identificação visual prévia de tags no log inserido
     if user_input.strip():
         encontrou_ext = re.findall(r'\b[A-Z0-9]+\.(VCL|LCO|PAT|CPF|BAS|DCD)\b', user_input, re.IGNORECASE)
         encontrou_campos = re.findall(r'cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+', user_input, re.IGNORECASE)
@@ -162,123 +233,169 @@ with aba1:
         if tags_html:
             st.markdown(f"<div style='margin-bottom: 15px;'>{tags_html}</div>", unsafe_allow_html=True)
 
-    # Botão de ação principal com destaque corporativo
     if st.button("🚀 Processar Análise Técnica", type="primary", use_container_width=True):
         if user_input.strip():
-            # Verifica se o erro já existe na base permanente (Economiza API e evita erro 429)
-            caso_existente = next((item for item in st.session_state["historico_casos"] if item["erro"].strip() == user_input.strip()), None)
+            texto_limpo = user_input.strip()
             
-            if caso_existente:
-                st.markdown("---")
-                st.success("⚡ Diagnóstico recuperado instantaneamente do Histórico Permanente (0 chamadas à API)!")
-                st.markdown("### 💡 Diagnóstico e Orientação Técnica")
-                st.markdown(caso_existente["resposta"])
+            # Validação Preventiva por Regex: Garante que o texto possui indícios de log do SIM/PGI ou campos técnicos
+            tem_estrutura_log = bool(re.search(r'\b([A-Z0-9]+\.(VCL|LCO|PAT|CPF|BAS|DCD|DAT|TXT))\b|cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+|descrição:|ocorrência', texto_limpo, re.IGNORECASE))
+            
+            if not tem_estrutura_log and len(texto_limpo) < 15:
+                st.warning("⚠️ O texto inserido não parece ser um relatório de erro válido do SIM TCE-CE. Cole um trecho oficial de ocorrência contendo módulos ou campos técnicos.")
             else:
-                with st.spinner("Analisando leiaute e consultando diretrizes de suporte..."):
-                    resposta_obtida = None
-                    sucesso = False
-                    
-                    modelos_para_tentar = ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
-                    
-                    prompt = f"""
-                    Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE, com foco em uma linguagem simples, clara e didática.
-                    Analise o erro de validação de dados abaixo (retirado de relatórios oficiais de ocorrência). 
-                    
-                    Forneça um diagnóstico estruturado estritamente nas seguintes partes:
-                    
-                    ### 🎯 Causa Raiz em Linguagem Simples
-                    (Explique o motivo da inconsistência de forma descomplicada, traduzindo o que o erro significa na prática para o usuário).
-
-                    ### 📍 Onde Encontrar e O Que Significa Cada Campo
-                    (Identifique os campos técnicos citados no erro - como cd_municipio, dt_versao_orc, cd_orgao, nu_registro_bem, etc. Explique qual é a função de cada um deles no leiaute e em qual parte/contexto do arquivo eles devem ser conferidos).
-
-                    ### ✅ Diretrizes Práticas de Correção
-                    (Forneça orientações passo a passo claras e diretas de como o usuário deve proceder no sistema de origem ou no arquivo para resolver o problema).
-
-                    REGRAS OBRIGATÓRIAS:
-                    - Use uma linguagem amigável, didática e de fácil compreensão.
-                    - NUNCA invente nomes de módulos ou telas de ERP. 
-                    - NÃO utilize scripts SQL ou comandos de banco de dados.
-                    - Certifique-se de concluir a resposta inteira sem cortes.
-
-                    Erro reportado:
-                    {user_input}
-                    """
-                    
-                    for nome_modelo in modelos_para_tentar:
-                        tentativas = 2
-                        for tentativa in range(tentativas):
-                            try:
-                                model = genai.GenerativeModel(nome_modelo)
-                                response = model.generate_content(prompt, generation_config={"temperature": 0.2, "max_output_tokens": 4096})
-                                if response and response.text:
-                                    resposta_obtida = response.text
-                                    sucesso = True
-                                    break
-                            except Exception as err:
-                                erro_str = str(err).lower()
-                                if "429" in erro_str or "quota" in erro_str:
-                                    time.sleep(3 * (tentativa + 1))
-                                    continue
-                                else:
-                                    break
-                        if sucesso:
-                            break
-
-                    if sucesso and resposta_obtida:
-                        # Salva na memória e grava permanentemente no arquivo JSON
-                        novo_caso = {
-                            "erro": user_input.strip(),
-                            "resposta": resposta_obtida
-                        }
-                        st.session_state["historico_casos"].append(novo_caso)
-                        salvar_historico(st.session_state["historico_casos"])
+                # Verifica se já existe no banco
+                caso_existente = next((item for item in st.session_state["historico_casos"] if item["erro"].strip() == texto_limpo), None)
+                
+                if caso_existente:
+                    st.markdown("---")
+                    st.success("⚡ Diagnóstico recuperado instantaneamente do Banco de Dados Permanente (0 chamadas à API)!")
+                    st.markdown("### 💡 Diagnóstico e Orientação Técnica")
+                    st.markdown(caso_existente["resposta"])
+                else:
+                    with st.spinner("Analisando leiaute e consultando diretrizes de suporte..."):
+                        resposta_obtida = None
+                        sucesso = False
                         
-                        st.markdown("---")
-                        st.success("Análise concluída com sucesso e gravada na Base Permanente!")
-                        st.markdown("### 💡 Diagnóstico e Orientação Técnica")
-                        st.markdown(resposta_obtida)
-                    else:
-                        st.error("⚠️ O limite de requisições gratuitas da API foi atingido (Erro 429). O sistema tentou modelos alternativos, mas todos retornaram sobrecarga momentânea.")
-                        st.info("💡 **Dica:** Aguarde alguns segundos ou pesquise na aba **Histórico Permanente** se este caso já foi solucionado anteriormente.")
+                        modelos_para_tentar = ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+                        
+                        prompt = f"""
+                        Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE, com foco em uma linguagem simples, clara e didática.
+                        Analise o erro de validação de dados abaixo (retirado de relatórios oficiais de ocorrência). 
+                        
+                        Forneça um diagnóstico estruturado estritamente nas seguintes partes:
+                        
+                        ### 🎯 Causa Raiz em Linguagem Simples
+                        (Explique o motivo da inconsistência de forma descomplicada, traduzindo o que o erro significa na prática para o usuário).
+
+                        ### 📍 Onde Encontrar e O Que Significa Cada Campo
+                        (Identifique os campos técnicos citados no erro - como cd_municipio, dt_versao_orc, cd_orgao, nu_registro_bem, etc. Explique qual é a função de cada um deles no leiaute e em qual parte/contexto do arquivo eles devem ser conferidos).
+
+                        ### ✅ Diretrizes Práticas de Correção
+                        (Forneça orientações passo a passo claras e diretas de como o usuário deve proceder no sistema de origem ou no arquivo para resolver o problema).
+
+                        REGRAS OBRIGATÓRIAS:
+                        - Use uma linguagem amigável, didática e de fácil compreensão.
+                        - NUNCA invente nomes de módulos ou telas de ERP. 
+                        - NÃO utilize scripts SQL ou comandos de banco de dados.
+                        - Certifique-se de concluir a resposta inteira sem cortes.
+
+                        Erro reportado:
+                        {texto_limpo}
+                        """
+                        
+                        for nome_modelo in modelos_para_tentar:
+                            tentativas = 2
+                            for tentativa in range(tentativas):
+                                try:
+                                    model = genai.GenerativeModel(nome_modelo)
+                                    response = model.generate_content(prompt, generation_config={"temperature": 0.2, "max_output_tokens": 4096})
+                                    if response and response.text:
+                                        resposta_obtida = response.text
+                                        sucesso = True
+                                        break
+                                except Exception as err:
+                                    err_str = str(err).lower()
+                                    if "429" in err_str or "quota" in err_str:
+                                        time.sleep(3 * (tentativa + 1))
+                                        continue
+                                    else:
+                                        break
+                            if sucesso:
+                                break
+
+                        if sucesso and resposta_obtida:
+                            salvar_caso_db(texto_limpo, resposta_obtida)
+                            st.session_state["historico_casos"] = carregar_historico_db()
+                            
+                            st.markdown("---")
+                            st.success("Análise concluída com sucesso e gravada no Banco de Dados SQLite!")
+                            st.markdown("### 💡 Diagnóstico e Orientação Técnica")
+                            st.markdown(resposta_obtida)
+                        else:
+                            st.error("⚠️ O limite de requisições gratuitas da API foi atingido (Erro 429). O sistema tentou modelos alternativos, mas todos retornaram sobrecarga momentânea.")
+                            st.info("💡 **Dica:** Aguarde alguns segundos ou pesquise na aba **Histórico Permanente** se este caso já foi solucionado anteriormente.")
         else:
             st.warning("⚠️ Por favor, insira ou carregue um texto de erro antes de processar a análise.")
 
 # ------------------------------------------
-# ABA 2: HISTÓRICO PERMANENTE COM BUSCA
+# ABA 2: HISTÓRICO COM BUSCA SEMÂNTICA E FEEDBACK
 # ------------------------------------------
-aba2_tab1 = aba2
-with aba2_tab1:
-    st.markdown("#### 📂 Repositório de Casos Resolvidos")
-    st.markdown("Consulte a base de dados acumulada. As análises ficam salvas permanentemente para consultas futuras rápidas, sem consumo de cota da API.")
+with aba2:
+    st.markdown("#### 📂 Repositório de Casos Resolvidos (Busca Semântica & Curadoria)")
+    st.markdown("Consulte os casos salvos. O sistema utiliza busca inteligente por similaridade e permite avaliar a utilidade das respostas.")
 
     if not st.session_state["historico_casos"]:
         st.info("Ainda não há casos salvos na base permanente. Realize sua primeira análise na aba de Diagnóstico.")
     else:
-        # Campo de busca moderna para o repositório
         termo_busca_historico = st.text_input(
-            "🔍 Pesquisar no histórico:", 
-            placeholder="Digite palavras-chave, ex: .PAT, .VCL, município, chaves..."
+            "🔍 Pesquisa Semântica no Histórico:", 
+            placeholder="Digite termos vagos ou descrições (ex: erro de chave, unidades, patrimônio)..."
         ).lower()
 
-        casos_filtrados = [
-            caso for caso in st.session_state["historico_casos"]
-            if termo_busca_historico in caso["erro"].lower() or termo_busca_historico in caso["resposta"].lower()
-        ]
+        casos_atuais = st.session_state["historico_casos"]
+
+        # Implementação da Busca Semântica Leve (TF-IDF + Cosseno) se houver termo digitado
+        if termo_busca_historico.strip():
+            corpus = [f"{c['erro']} {c['resposta']}" for c in casos_atuais]
+            corpus.append(termo_busca_historico) # Adiciona a busca ao final para vetorização
+            
+            try:
+                vectorizer = TfidfVectorizer().fit_transform(corpus)
+                vetores = vectorizer.toarray()
+                vetor_busca = vetores[-1]
+                vetores_corpus = vetores[:-1]
+                
+                similaridades = cosine_similarity([vetor_busca], vetores_corpus)[0]
+                
+                # Associa a pontuação de similaridade aos casos
+                casos_com_score = list(zip(casos_atuais, similaridades))
+                # Filtra apenas os que possuem alguma relevância mínima ou ordena por maior similaridade
+                casos_com_score = sorted(casos_com_score, key=lambda x: x[1], reverse=True)
+                
+                # Considera encontrados aqueles com score > 0.02 ou correspondência exata de texto
+                casos_filtrados = [item[0] for item in casos_com_score if item[1] > 0.02 or termo_busca_historico in item[0]['erro'].lower()]
+            except Exception:
+                # Fallback seguro caso ocorra erro no TF-IDF
+                casos_filtrados = [c for c in casos_atuais if termo_busca_historico in c['erro'].lower() or termo_busca_historico in c['resposta'].lower()]
+        else:
+            # Ordena com prioridade para os casos bem avaliados (feedback == 1)
+            casos_filtrados = sorted(casos_atuais, key=lambda x: x['feedback'], reverse=True)
 
         if not casos_filtrados:
-            st.warning("Nenhum caso correspondente encontrado na base permanente.")
+            st.warning("Nenhum caso correspondente encontrado na base permanente com este critério semântico.")
         else:
-            st.markdown(f"**Resultados encontrados:** {len(casos_filtrados)} de {len(st.session_state['historico_casos'])} registro(s)")
+            st.markdown(f"**Resultados exibidos:** {len(casos_filtrados)} de {len(casos_atuais)} registro(s)")
             st.markdown("---")
             
             for idx, caso in enumerate(casos_filtrados):
+                # Prefixo visual indicando feedback positivo/negativo
+                icone_status = "⭐ " if caso['feedback'] == 1 else ("⚠️ " if caso['feedback'] == -1 else "")
                 titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:65]
-                with st.expander(f"📌 Caso #{idx+1}: {titulo_resumo}"):
+                
+                with st.expander(f"{icone_status}Caso #{caso['id']}: {titulo_resumo}"):
                     st.markdown(f"**Log Registrado:**")
                     st.markdown(f"> {caso['erro']}")
                     st.markdown("---")
                     st.markdown(caso["resposta"])
+                    st.markdown("---")
+                    
+                    # Sistema de Votação / Feedback (👍 / 👎)
+                    col_fb1, col_fb2, col_fb3 = st.columns([2, 2, 6])
+                    with col_fb1:
+                        if st.button("👍 Resposta Útil", key=f"btn_sim_{caso['id']}"):
+                            atualizar_feedback_db(caso['id'], 1)
+                            st.session_state["historico_casos"] = carregar_historico_db()
+                            st.success("Obrigado pelo feedback! Caso marcado como útil.")
+                            st.rerun()
+                    with col_fb2:
+                        if st.button("👎 Precisa Melhorar", key=f"btn_nao_{caso['id']}"):
+                            atualizar_feedback_db(caso['id'], -1)
+                            st.session_state["historico_casos"] = carregar_historico_db()
+                            st.warning("Feedback registrado.")
+                            st.rerun()
+                    with col_fb3:
+                        status_atual_txt = "⭐ Aprovado pela equipe" if caso['feedback'] == 1 else ("⚠️ Requer atenção" if caso['feedback'] == -1 else "Ainda não avaliado")
+                        st.caption(f"Status de Curadoria: **{status_atual_txt}**")
 
 # ------------------------------------------
 # ABA 3: BASE DE CONHECIMENTO E REFERÊNCIAS
