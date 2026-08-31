@@ -72,21 +72,6 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
-    /* Cartões e Blocos com Contornos Fortes */
-    div.stMarkdownContainer, .element-container {
-        color: var(--text-main);
-    }
-
-    /* Estilização personalizada para simular Cards de Conteúdo */
-    .card-container {
-        background-color: var(--surface);
-        border: 1px solid var(--border-color);
-        border-radius: 10px;
-        padding: 24px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        margin-bottom: 20px;
-    }
-
     /* Botões */
     .stButton button {
         border-radius: 6px;
@@ -102,7 +87,6 @@ st.markdown("""
         color: var(--primary);
     }
 
-    /* Botão Primário em Destaque */
     .stButton button[kind="primary"] {
         background-color: var(--primary);
         color: white;
@@ -465,16 +449,19 @@ with aba2:
             st.markdown("")
             
             for idx, caso in enumerate(casos_filtrados):
-                if caso['feedback'] == 1:
-                    status_badge = "<span style='background-color: #DCFCE7; color: #166534; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid #BBF7D0;'>Aprovado</span>"
-                elif caso['feedback'] == -1:
-                    status_badge = "<span style='background-color: #FEF2F2; color: #991B1B; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid #FECACA;'>Requer atenção</span>"
-                else:
-                    status_badge = "<span style='background-color: #F1F5F9; color: #475569; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid #E2E8F0;'>Não avaliado</span>"
-                
                 titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:65]
                 
-                with st.expander(f"Caso #{caso['id']} — {titulo_resumo}  |  {status_badge}"):
+                # Título limpo no expander (sem HTML bruto)
+                with st.expander(f"Caso #{caso['id']} — {titulo_resumo}"):
+                    # Badge de status renderizado corretamente na parte interna superior do card
+                    if caso['feedback'] == 1:
+                        st.markdown("<span style='background-color: #DCFCE7; color: #166534; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #BBF7D0;'>Status: Aprovado</span>", unsafe_allow_html=True)
+                    elif caso['feedback'] == -1:
+                        st.markdown("<span style='background-color: #FEF2F2; color: #991B1B; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #FECACA;'>Status: Requer atenção</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("<span style='background-color: #F1F5F9; color: #475569; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #E2E8F0;'>Status: Não avaliado</span>", unsafe_allow_html=True)
+                    
+                    st.markdown("")
                     st.markdown("**Log Registrado:**")
                     st.markdown(f"<div style='background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 13px;'>{caso['erro']}</div>", unsafe_allow_html=True)
                     st.markdown("---")
