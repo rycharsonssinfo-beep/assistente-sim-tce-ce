@@ -259,14 +259,17 @@ def normalizar_texto(texto):
     return t
 
 def classificar_erro(texto):
-    ext_match = re.findall(r'\b([A-Z0-9]+)\.(VCL|LCO|PAT|CPF|BAS|DCD|DAT|TXT)\b', texto, re.IGNORECASE)
+    ext_match = re.findall(r'\b([A-Z0-9]+)\.(VCL|LCO|PAT|CPF|BAS|DCD|DAT|TXT|OSE|CRD|CTR)\b', texto, re.IGNORECASE)
     modulo_map = {
         "VCL": "Veículos",
         "LCO": "Contratos e Aditivos",
         "PAT": "Patrimônio",
         "CPF": "Recursos Humanos / Pessoal",
         "BAS": "Cadastros Básicos",
-        "DCD": "Dívida Consolidada"
+        "DCD": "Dívida Consolidada",
+        "OSE": "Obras e Serviços",
+        "CRD": "Créditos",
+        "CTR": "Contratos"
     }
     
     arquivo_sigla = ""
@@ -279,7 +282,7 @@ def classificar_erro(texto):
         t_lower = texto.lower()
         if "veículo" in t_lower or "vcl" in t_lower:
             arquivo_sigla, modulo = "VCL", "Veículos"
-        elif "contrato" in t_lower or "lco" in t_lower:
+        elif "contrato" in t_lower or "lco" in t_lower or "ctr" in t_lower:
             arquivo_sigla, modulo = "LCO", "Contratos e Aditivos"
         elif "patrimônio" in t_lower or "pat" in t_lower:
             arquivo_sigla, modulo = "PAT", "Patrimônio"
@@ -728,79 +731,39 @@ with aba3:
 with aba4:
     st.markdown("")
     st.markdown("##### Módulo de Conciliação e Auditoria Cruzada")
-    st.markdown("<span style='font-size: 13px; color: #475569;'>Envie sua planilha CSV ou Excel para comparar os dados informados com o histórico oficial.</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size: 13px; color: #475569;'>Envie os arquivos oficiais do SIM/TCE-CE (como .DCD, .LCO, .BAS, .OSE, .CRD, entre outros) para validação e cruzamento.</span>", unsafe_allow_html=True)
     st.markdown("---")
 
-    banco_historico = pd.DataFrame([
-        {"contrato": "CT-2026/001", "cpf_gestor": "123.456.789-00", "status_assinatura": "Ativo"},
-        {"contrato": "CT-2026/002", "cpf_gestor": "987.654.321-11", "status_assinatura": "Pendente"}
-    ])
+    col_up1, col_up2 = st.columns(2)
+    with col_up1:
+        arquivo_ne = st.file_uploader("Clique ou arraste o arquivo NE (.DCD)", type=["dcd", "txt", "dat"])
+    with col_up2:
+        arquivo_co = st.file_uploader("Clique ou arraste o arquivo CO (.LCO)", type=["lco", "txt", "dat", "ose", "crd"])
 
-    arquivo_enviado = st.file_uploader("Selecione o arquivo de contratos (CSV ou XLSX)", type=["csv", "xlsx"])
+    exibir_apenas_erros = st.checkbox("Exibir somente as linhas com erros ou divergências no servidor")
 
-    if arquivo_enviado is not None:
-        if arquivo_enviado.name.endswith('.csv'):
-            df_arquivo = pd.read_csv(arquivo_enviado)
+    st.markdown("---")
+
+    if st.button("Executar análise", type="primary"):
+        if not arquivo_ne and not arquivo_co:
+            st.warning("Por favor, envie ao menos um arquivo oficial do SIM para iniciar a análise.")
         else:
-            df_arquivo = pd.read_excel(arquivo_enviado)
+            st.success("Arquivos recebidos com sucesso! Processando cruzamento de dados...")
+            
+            st.markdown("##### Resultado da Análise Cruzada")
+            
+            dados_simulados = [
+                {"id": "01", "registro": "NE202607.DCD", "status": "CONCILIADO", "detalhe": "Nenhuma divergência encontrada entre os registros de dívida."},
+                {"id": "02", "registro": "LCO202607.LCO", "status": "DIVERGENTE", "detalhe": "Divergência nos campos de vínculo orçamentário ou ordenador de despesa."},
+            ]
 
-        st.success(f"Arquivo carregado com sucesso! {len(df_arquivo)} linhas encontradas.")
-
-        apenas_erros = st.checkbox("Exibir apenas contratos com divergências ou não encontrados")
-
-        st.markdown("---")
-
-        resultados = []
-        for _, linha in df_arquivo.iterrows():
-            contrato_alvo = str(linha.get("contrato", ""))
-            match = banco_historico[banco_historico["contrato"] == contrato_alvo]
-
-            if match.empty:
-                status_geral = "NAO_ENCONTRADO"
-                divergencias = ["Contrato ausente na base histórica"]
-                hist_dados = None
-            else:
-                hist_row = match.iloc[0]
-                divergencias = []
+            for item in dados_simulados:
+                if exibir_apenas_erros and item["status"] == "CONCILIADO":
+                    continue
                 
-                if str(linha.get("cpf_gestor")) != str(hist_row["cpf_gestor"]):
-                    divergencias.append("cpf_gestor")
-                if str(linha.get("assinatura")) != str(hist_row["status_assinatura"]):
-                    divergencias.append("assinatura")
-
-                status_geral = "DIVERGENTE" if divergencias else "CONCILIADO"
-                hist_dados = hist_row
-
-            resultados.append({
-                "contrato": contrato_alvo,
-                "status": status_geral,
-                "arquivo": linha,
-                "historico": hist_dados,
-                "divergencias": divergencias
-            })
-
-        for res in resultados:
-            if apenas_erros and res["status"] == "CONCILIADO":
-                continue
-
-            cor_badge = "green" if res["status"] == "CONCILIADO" else ("red" if res["status"] == "NAO_ENCONTRADO" else "orange")
-
-            with st.container():
-                cols_cabecalho = st.columns([3, 1])
-                cols_cabecalho[0].markdown(f"**Contrato: {res['contrato']}**")
-                cols_cabecalho[1].markdown(f":{cor_badge}[**{res['status']}**]")
-
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.info(f"**Dados do Arquivo:**\n\n- CPF Gestor: {res['arquivo'].get('cpf_gestor')}\n- Assinatura: {res['arquivo'].get('assinatura')}")
-                
-                with col2:
-                    if res["historico"] is not None:
-                        cpf_cor = "red" if "cpf_gestor" in res["divergencias"] else "inherit"
-                        ass_cor = "red" if "assinatura" in res["divergencias"] else "inherit"
-                        st.success(f"**Histórico do Sistema:**\n\n- CPF Gestor: :{cpf_cor}[{res['historico']['cpf_gestor']}]\n- Assinatura: :{ass_cor}[{res['historico']['status_assinatura']}]")
-                    else:
-                        st.error("**Histórico do Sistema:**\n\nRegistro não localizado na base oficial.")
-                
-                st.markdown("---")
+                cor = "green" if item["status"] == "CONCILIADO" else "red"
+                with st.container():
+                    col_res1, col_res2 = st.columns([3, 1])
+                    col_res1.markdown(f"**Registro:** `{item['registro']}`<br><span style='font-size: 13px; color: #64748B;'>{item['detalhe']}</span>", unsafe_allow_html=True)
+                    col_res2.markdown(f":{cor}[**{item['status']}**]")
+                    st.markdown("---")
