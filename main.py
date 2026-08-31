@@ -9,7 +9,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA E ESTILO VISUAL
+# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM (CSS)
 # ==========================================
 st.set_page_config(
     page_title="Assistente SIM TCE-CE",
@@ -19,26 +19,102 @@ st.set_page_config(
 
 st.markdown("""
     <style>
+    /* Cores Globais e Tipografia Base */
+    :root {
+        --bg-main: #F8FAFC;
+        --surface: #FFFFFF;
+        --border-subtle: #E2E8F0;
+        --text-main: #0F172A;
+        --text-secondary: #475569;
+        --text-muted: #64748B;
+        --primary: #0284C7;
+        --primary-hover: #0369A1;
+    }
+
     .main {
-        background-color: #F8FAFC;
+        background-color: var(--bg-main);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
+
+    /* Ocultar elementos padrão excessivos do Streamlit se necessário, mantendo a limpeza */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+        max-width: 1200px;
+    }
+
+    /* Tipografia e Cabeçalhos */
     h1, h2, h3 {
-        color: #0F172A;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: var(--text-main);
+        font-weight: 600;
+        letter-spacing: -0.025em;
     }
-    .stMetric {
-        background-color: #FFFFFF;
-        padding: 15px;
-        border-radius: 8px;
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    
+    /* Estilização Moderna de Abas (Tabs) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent;
+        border-bottom: 1px solid var(--border-subtle);
+        padding-bottom: 0px;
     }
-    blockquote {
-        border-left: 4px solid #0284C7;
+    .stTabs [data-baseweb="tab"] {
+        height: 42px;
+        background-color: transparent;
+        border-radius: 6px 6px 0 0;
+        color: var(--text-secondary);
+        font-weight: 500;
+        font-size: 14px;
+        border: none;
+        padding: 0 16px;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: var(--surface) !important;
+        color: var(--primary) !important;
+        border: 1px solid var(--border-subtle);
+        border-bottom: 1px solid var(--surface);
+        font-weight: 600;
+    }
+
+    /* Cartões e Containers Sutis */
+    .element-container, .stMarkdown {
+        color: var(--text-main);
+    }
+
+    /* Botões Principais e Secundários */
+    .stButton button {
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 14px;
+        transition: all 0.15s ease;
+    }
+
+    /* Ajustes finos em Inputs e Textareas */
+    .stTextArea textarea, .stTextInput input {
+        border-radius: 6px !important;
+        border-color: var(--border-subtle) !important;
+        background-color: var(--surface) !important;
+        color: var(--text-main) !important;
+    }
+    .stTextArea textarea:focus, .stTextInput input:focus {
+        border-color: var(--primary) !important;
+        box-shadow: 0 0 0 1px var(--primary) !important;
+    }
+
+    /* Sidebar Profissional e Discreta */
+    section[data-testid="stSidebar"] {
         background-color: #F1F5F9;
-        padding: 10px 15px;
-        border-radius: 0 6px 6px 0;
-        color: #334155;
+        border-right: 1px solid var(--border-subtle);
+    }
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 1.5rem;
+    }
+
+    /* Expander Moderno */
+    div[data-testid="stExpander"] {
+        background-color: var(--surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -49,7 +125,6 @@ st.markdown("""
 NOME_BANCO = "banco_sim_tce.db"
 
 def inicializar_banco():
-    """Cria a tabela de casos resolvidos com coluna de feedback se não existir."""
     conn = sqlite3.connect(NOME_BANCO)
     cursor = conn.cursor()
     cursor.execute("""
@@ -68,7 +143,6 @@ def inicializar_banco():
     conn.close()
 
 def carregar_historico_db():
-    """Carrega todos os casos salvos no banco SQLite."""
     inicializar_banco()
     conn = sqlite3.connect(NOME_BANCO)
     cursor = conn.cursor()
@@ -78,7 +152,6 @@ def carregar_historico_db():
     return [{"id": row[0], "erro": row[1], "resposta": row[2], "feedback": row[3]} for row in dados]
 
 def salvar_caso_db(erro, resposta):
-    """Insere um novo caso no banco SQLite."""
     inicializar_banco()
     conn = sqlite3.connect(NOME_BANCO)
     cursor = conn.cursor()
@@ -91,7 +164,6 @@ def salvar_caso_db(erro, resposta):
         conn.close()
 
 def atualizar_feedback_db(caso_id, novo_valor):
-    """Atualiza o feedback (1 para útil, -1 para não útil) de um caso."""
     inicializar_banco()
     conn = sqlite3.connect(NOME_BANCO)
     cursor = conn.cursor()
@@ -100,13 +172,11 @@ def atualizar_feedback_db(caso_id, novo_valor):
     conn.close()
 
 def exportar_base_json():
-    """Exporta registros do banco para JSON."""
     historico = carregar_historico_db()
     dados_limpos = [{"erro": item["erro"], "resposta": item["resposta"], "feedback": item["feedback"]} for item in historico]
     return json.dumps(dados_limpos, ensure_ascii=False, indent=4)
 
 def importar_base_json(arquivo_carregado):
-    """Importa e mescla dados de um arquivo de backup externo."""
     try:
         conteudo = json.load(arquivo_carregado)
         if isinstance(conteudo, list):
@@ -133,51 +203,52 @@ if "historico_casos" not in st.session_state:
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
 if not api_key:
-    st.error("⚠️ A chave de configuração não foi encontrada! Configure-a nas 'Secrets' do Streamlit Cloud.")
+    st.error("A chave de configuração não foi encontrada. Configure-a nas 'Secrets' do Streamlit Cloud.")
 else:
     genai.configure(api_key=api_key)
 
 # ==========================================
-# 4. BARRA LATERAL (SIDEBAR PROFISSIONAL)
+# 4. BARRA LATERAL (SIDEBAR REORGANIZADA E LIMPA)
 # ==========================================
 with st.sidebar:
-    st.markdown("### ⚖️ SIM TCE-CE")
-    st.caption("Painel Técnico de Suporte e Diagnóstico")
+    st.markdown("### SIM TCE-CE")
+    st.caption("Assistente de Diagnóstico Técnico")
     st.markdown("---")
     
-    st.markdown("**📌 Sobre a Ferramenta**")
-    st.markdown("Plataforma com busca semântica, feedback de utilidade e persistência SQLite para apoio na validação de layouts.")
+    st.markdown("**Sobre a Ferramenta**")
+    st.markdown("<span style='font-size: 13px; color: #475569;'>Plataforma com busca semântica, feedback de utilidade e persistência SQLite para apoio na validação de layouts.</span>", unsafe_allow_html=True)
     
     st.markdown("---")
-    st.metric(label="Casos na Base Permanente", value=len(st.session_state["historico_casos"]))
+    st.markdown("**Base Permanente**")
+    st.markdown(f"<span style='font-size: 20px; font-weight: 600; color: #0F172A;'>{len(st.session_state['historico_casos'])}</span> <span style='font-size: 13px; color: #64748B;'>casos armazenados</span>", unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown("### 💾 Salvamento e Cópia")
+    st.markdown("**Backup e Restauração**")
     
     dados_json_str = exportar_base_json()
     st.download_button(
-        label="📥 Baixar Cópia de Segurança",
+        label="Baixar cópia de segurança",
         data=dados_json_str,
         file_name="backup_historico_sim_tce.json",
         mime="application/json",
         use_container_width=True,
-        help="Gera um arquivo com todos os diagnósticos salvos para você guardar no seu computador."
+        help="Gera um arquivo de backup com todos os diagnósticos salvos."
     )
     
     arquivo_submetido = st.file_uploader(
-        "📤 Carregar Cópia Salva", 
+        "Carregar cópia salva", 
         type=["json"],
-        help="Selecione um arquivo de backup gerado anteriormente para recuperar seus casos salvos."
+        help="Selecione um arquivo de backup gerado anteriormente."
     )
     
     if arquivo_submetido is not None:
-        if st.button("🔄 Confirmar Restauração", use_container_width=True):
+        if st.button("Confirmar restauração", use_container_width=True):
             if importar_base_json(arquivo_submetido):
                 st.session_state["historico_casos"] = carregar_historico_db()
-                st.success("Histórico de casos restaurado com sucesso!")
+                st.success("Histórico restaurado com sucesso.")
                 st.rerun()
             else:
-                st.error("Erro ao processar o arquivo enviado. Certifique-se de que é um backup válido.")
+                st.error("Erro ao processar o arquivo enviado.")
 
     st.markdown("---")
     st.caption("Desenvolvido para otimização de rotinas contábeis.")
@@ -185,41 +256,42 @@ with st.sidebar:
 # ==========================================
 # 5. TELA PRINCIPAL E ABAS
 # ==========================================
-st.title("Assistente de Diagnóstico SIM TCE-CE")
-st.markdown("Central inteligente de análise de consistências, tradução de logs e consulta de orientações técnicas.")
+st.markdown("### Assistente de Diagnóstico SIM TCE-CE")
+st.markdown("<span style='color: #475569; font-size: 15px;'>Central inteligente de análise de consistências, tradução de logs e consulta de orientações técnicas.</span>", unsafe_allow_html=True)
 st.markdown("---")
 
 aba1, aba2, aba3 = st.tabs([
-    "🔍 Diagnóstico Inteligente", 
-    "📂 Histórico Permanente", 
-    "💡 Base de Conhecimento"
+    "Diagnóstico Inteligente", 
+    "Histórico Permanente", 
+    "Base de Conhecimento"
 ])
 
 # ------------------------------------------
 # ABA 1: DIAGNÓSTICO E ENTRADA DE LOGS
 # ------------------------------------------
 with aba1:
-    st.markdown("#### 📥 Entrada de Dados do Relatório de Ocorrência")
-    st.info("Cole abaixo o trecho do relatório de ocorrência do PGI/SIM TCE-CE para gerar o diagnóstico técnico.")
+    st.markdown("##### Entrada de Dados do Relatório de Ocorrência")
+    st.markdown("<span style='font-size: 13px; color: #64748B;'>Cole abaixo o trecho do relatório de ocorrência do PGI/SIM TCE-CE para gerar o diagnóstico técnico.</span>", unsafe_allow_html=True)
     
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        if st.button("🚗 Exemplo: Veículos (.VCL)", use_container_width=True):
+    # Exemplos rápidos estilizados como ações discretas
+    col_ex1, col_ex2, col_space = st.columns([1, 1, 2])
+    with col_ex1:
+        if st.button("Exemplo: Veículos (.VCL)", use_container_width=True):
             st.session_state["erro_input"] = (
                 "BV202607.VCL - DESTINAÇÃO DE VEÍCULOS\n"
                 "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc ) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS."
             )
-    with col_btn2:
-        if st.button("🏛️ Exemplo: Patrimônio (.PAT)", use_container_width=True):
+    with col_ex2:
+        if st.button("Exemplo: Patrimônio (.PAT)", use_container_width=True):
             st.session_state["erro_input"] = (
                 "RP202607.PAT - CONTAS REDUTORAS DOS BENS INCORPORADOS AO PATRIMÔNIO DO MUNICÍPIO\n"
                 "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, nu_registro_bem ) que compõe(m) a chave do arquivo BENS_MUNICIPIOS."
             )
     
     user_input = st.text_area(
-        "Relatório de Erro:",
+        "Relatório de Erro",
         value=st.session_state.get("erro_input", ""),
-        height=150,
+        height=140,
         placeholder="Cole o trecho do erro aqui..."
     )
 
@@ -227,31 +299,32 @@ with aba1:
         encontrou_ext = re.findall(r'\b[A-Z0-9]+\.(VCL|LCO|PAT|CPF|BAS|DCD)\b', user_input, re.IGNORECASE)
         encontrou_campos = re.findall(r'cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+', user_input, re.IGNORECASE)
         
-        tags_html = ""
+        badges_html = "<div style='display: flex; gap: 8px; margin: 12px 0 16px 0; flex-wrap: wrap; align-items: center;'>"
         if encontrou_ext:
-            tags_html += f"<span style='background-color:#E0F2FE; color:#0369A1; padding:4px 10px; border-radius:6px; margin-right:8px; font-weight:600; font-size:13px;'>📦 Módulo: {encontrou_ext[0][0].upper()}</span>"
+            badges_html += f"<span style='background-color: #E0F2FE; color: #0369A1; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; border: 1px solid #BAE6FD;'>Módulo: {encontrou_ext[0][0].upper()}</span>"
         if encontrou_campos:
             amostra_campos = ", ".join(set(encontrou_campos[:4]))
-            tags_html += f"<span style='background-color:#FEF3C7; color:#B45309; padding:4px 10px; border-radius:6px; margin-right:8px; font-weight:600; font-size:13px;'>🔑 Chaves: {amostra_campos}</span>"
+            badges_html += f"<span style='background-color: #FEF3C7; color: #B45309; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; border: 1px solid #FDE68A;'>Chaves: {amostra_campos}</span>"
+        badges_html += "</div>"
             
-        if tags_html:
-            st.markdown(f"<div style='margin-bottom: 15px;'>{tags_html}</div>", unsafe_allow_html=True)
+        if encontrou_ext or encontrou_campos:
+            st.markdown(badges_html, unsafe_allow_html=True)
 
-    if st.button("🚀 Processar Análise Técnica", type="primary", use_container_width=True):
+    if st.button("Processar Análise Técnica", type="primary", use_container_width=True):
         if user_input.strip():
             texto_limpo = user_input.strip()
             
             tem_estrutura_log = bool(re.search(r'\b([A-Z0-9]+\.(VCL|LCO|PAT|CPF|BAS|DCD|DAT|TXT))\b|cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+|descrição:|ocorrência', texto_limpo, re.IGNORECASE))
             
             if not tem_estrutura_log and len(texto_limpo) < 15:
-                st.warning("⚠️ O texto inserido não parece ser um relatório de erro válido do SIM TCE-CE. Cole um trecho oficial de ocorrência contendo módulos ou campos técnicos.")
+                st.warning("O texto inserido não parece ser um relatório de erro válido do SIM TCE-CE. Cole um trecho oficial de ocorrência contendo módulos ou campos técnicos.")
             else:
                 caso_existente = next((item for item in st.session_state["historico_casos"] if item["erro"].strip() == texto_limpo), None)
                 
                 if caso_existente:
                     st.markdown("---")
-                    st.success("⚡ Diagnóstico recuperado instantaneamente do Banco de Dados Permanente (0 chamadas à API)!")
-                    st.markdown("### 💡 Diagnóstico e Orientação Técnica")
+                    st.success("Diagnóstico recuperado instantaneamente do Banco de Dados Permanente.")
+                    st.markdown("##### Diagnóstico e Orientação Técnica")
                     st.markdown(caso_existente["resposta"])
                 else:
                     with st.spinner("Analisando leiaute e consultando diretrizes de suporte..."):
@@ -310,27 +383,28 @@ with aba1:
                             st.session_state["historico_casos"] = carregar_historico_db()
                             
                             st.markdown("---")
-                            st.success("Análise concluída com sucesso e gravada no Banco de Dados SQLite!")
-                            st.markdown("### 💡 Diagnóstico e Orientação Técnica")
+                            st.success("Análise concluída com sucesso e gravada no Banco de Dados SQLite.")
+                            st.markdown("##### Diagnóstico e Orientação Técnica")
                             st.markdown(resposta_obtida)
                         else:
-                            st.error("⚠️ O limite de requisições gratuitas da API foi atingido (Erro 429). O sistema tentou modelos alternativos, mas todos retornaram sobrecarga momentânea.")
-                            st.info("💡 **Dica:** Aguarde alguns segundos ou pesquise na aba **Histórico Permanente** se este caso já foi solucionado anteriormente.")
+                            st.error("O limite de requisições gratuitas da API foi atingido (Erro 429). O sistema tentou modelos alternativos, mas todos retornaram sobrecarga momentânea.")
+                            st.info("Dica: Aguarde alguns segundos ou pesquise na aba Histórico Permanente se este caso já foi solucionado anteriormente.")
         else:
-            st.warning("⚠️ Por favor, insira ou carregue um texto de erro antes de processar a análise.")
+            st.warning("Por favor, insira ou carregue um texto de erro antes de processar a análise.")
 
 # ------------------------------------------
 # ABA 2: HISTÓRICO COM BUSCA SEMÂNTICA E FEEDBACK
 # ------------------------------------------
 with aba2:
-    st.markdown("#### 📂 Repositório de Casos Resolvidos (Busca Semântica & Curadoria)")
-    st.markdown("Consulte os casos salvos. O sistema utiliza busca inteligente por similaridade e permite avaliar a utilidade das respostas.")
+    st.markdown("##### Repositório de Casos Resolvidos")
+    st.markdown("<span style='font-size: 13px; color: #64748B;'>Consulte os casos salvos utilizando busca inteligente por similaridade e avalie a utilidade das respostas.</span>", unsafe_allow_html=True)
+    st.markdown("")
 
     if not st.session_state["historico_casos"]:
         st.info("Ainda não há casos salvos na base permanente. Realize sua primeira análise na aba de Diagnóstico.")
     else:
         termo_busca_historico = st.text_input(
-            "🔍 Pesquisa Semântica no Histórico:", 
+            "Pesquisa Semântica no Histórico", 
             placeholder="Digite termos vagos ou descrições (ex: erro de chave, unidades, patrimônio)..."
         ).lower()
 
@@ -357,17 +431,24 @@ with aba2:
             casos_filtrados = sorted(casos_atuais, key=lambda x: x['feedback'], reverse=True)
 
         if not casos_filtrados:
-            st.warning("Nenhum caso correspondente encontrado na base permanente com este critério semântico.")
+            st.warning("Nenhum caso correspondente encontrado na base permanente com este critério.")
         else:
-            st.markdown(f"**Resultados exibidos:** {len(casos_filtrados)} de {len(casos_atuais)} registro(s)")
-            st.markdown("---")
+            st.markdown(f"<span style='font-size: 13px; color: #64748B;'>Exibindo <b>{len(casos_filtrados)}</b> de <b>{len(casos_atuais)}</b> registro(s)</span>", unsafe_allow_html=True)
+            st.markdown("")
             
             for idx, caso in enumerate(casos_filtrados):
-                icone_status = "⭐ " if caso['feedback'] == 1 else ("⚠️ " if caso['feedback'] == -1 else "")
+                # Badges de status discretos
+                if caso['feedback'] == 1:
+                    status_badge = "<span style='background-color: #DCFCE7; color: #166534; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;'>Aprovado</span>"
+                elif caso['feedback'] == -1:
+                    status_badge = "<span style='background-color: #FEF2F2; color: #991B1B; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;'>Requer atenção</span>"
+                else:
+                    status_badge = "<span style='background-color: #F1F5F9; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;'>Não avaliado</span>"
+                
                 titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:65]
                 
-                with st.expander(f"{icone_status}Caso #{caso['id']}: {titulo_resumo}"):
-                    st.markdown(f"**Log Registrado:**")
+                with st.expander(f"Caso #{caso['id']} — {titulo_resumo}  |  {status_badge}"):
+                    st.markdown("**Log Registrado:**")
                     st.markdown(f"> {caso['erro']}")
                     st.markdown("---")
                     st.markdown(caso["resposta"])
@@ -375,30 +456,32 @@ with aba2:
                     
                     col_fb1, col_fb2, col_fb3 = st.columns([2, 2, 6])
                     with col_fb1:
-                        if st.button("👍 Resposta Útil", key=f"btn_sim_{caso['id']}"):
+                        if st.button("Resposta útil", key=f"btn_sim_{caso['id']}"):
                             atualizar_feedback_db(caso['id'], 1)
                             st.session_state["historico_casos"] = carregar_historico_db()
-                            st.success("Obrigado pelo feedback! Caso marcado como útil.")
+                            st.success("Caso marcado como útil.")
                             st.rerun()
                     with col_fb2:
-                        if st.button("👎 Precisa Melhorar", key=f"btn_nao_{caso['id']}"):
+                        if st.button("Precisa melhorar", key=f"btn_nao_{caso['id']}"):
                             atualizar_feedback_db(caso['id'], -1)
                             st.session_state["historico_casos"] = carregar_historico_db()
                             st.warning("Feedback registrado.")
                             st.rerun()
                     with col_fb3:
-                        status_atual_txt = "⭐ Aprovado pela equipe" if caso['feedback'] == 1 else ("⚠️ Requer atenção" if caso['feedback'] == -1 else "Ainda não avaliado")
-                        st.caption(f"Status de Curadoria: **{status_atual_txt}**")
+                        status_atual_txt = "Aprovado pela equipe" if caso['feedback'] == 1 else ("Requer atenção" if caso['feedback'] == -1 else "Ainda não avaliado")
+                        st.markdown(f"<span style='font-size: 12px; color: #64748B; line-height: 2.2;'>Curadoria: <b>{status_atual_txt}</b></span>", unsafe_allow_html=True)
 
 # ------------------------------------------
 # ABA 3: BASE DE CONHECIMENTO E REFERÊNCIAS
 # ------------------------------------------
 with aba3:
-    st.markdown("#### 📚 Base de Conhecimento e Padrões SIM 2026")
+    st.markdown("##### Base de Conhecimento e Padrões SIM 2026")
+    st.markdown("<span style='font-size: 13px; color: #64748B;'>Consulte os guias rápidos e manuais de orientação técnica organizados por módulos.</span>", unsafe_allow_html=True)
+    st.markdown("")
     
-    termo_busca = st.text_input("🔍 Filtrar guias de referência:", placeholder="Digite ex: 'Veículos', 'Contratos', 'Patrimônio'...").lower()
+    termo_busca = st.text_input("Filtrar guias de referência", placeholder="Digite ex: 'Veículos', 'Contratos', 'Patrimônio'...").lower()
 
-    with st.expander("🏛️ 1. Erros de Unidades Orçamentárias e Vínculos (Ex: .VCL, .PAT)"):
+    with st.expander("🏛️ Erros de Unidades Orçamentárias e Vínculos (Ex: .VCL, .PAT)"):
         st.markdown("""
         * **Ocorrência Comum no Log:**  
           *Não há relação com o(s) campo(s) ( cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc ) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS.*
@@ -413,7 +496,7 @@ with aba3:
           2. Confira se a data da versão do orçamento informada no sistema contábil bate exatamente com a remessa oficial da LOA.
         """)
 
-    with st.expander("📝 2. Erros em Contratos, Aditivos e Ordenadores (Ex: .LCO)"):
+    with st.expander("📝 Erros em Contratos, Aditivos e Ordenadores (Ex: .LCO)"):
         st.markdown("""
         * **Ocorrência Comum no Log:**  
           *Gestor responsável pelo Contrato não encontrado no cadastro de Ordenadores* ou *Aditivo sem Contrato Original vinculado*.
@@ -427,7 +510,7 @@ with aba3:
           2. **Para o gestor:** O CPF do ordenador de despesa deve estar ativo e devidamente informado na remessa de agentes públicos/responsáveis daquele respectivo mês.
         """)
 
-    with st.expander("👥 3. Inconsistências na Folha de Pagamento e Servidores"):
+    with st.expander("👥 Inconsistências na Folha de Pagamento e Servidores"):
         st.markdown("""
         * **Ocorrência Comum no Log:**  
           *Divergência ou ausência de vínculo empregatício para o CPF informado no arquivo de remessa de pessoal.*
@@ -441,12 +524,12 @@ with aba3:
           2. Confirme se houve alteração de cargo ou regime jurídico não atualizada no sistema de origem.
         """)
 
-    with st.expander("📌 4. Guia Rápido: Como Ler os Campos nas Linhas dos Arquivos"):
+    with st.expander("📌 Guia Rápido: Como Ler os Campos nas Linhas dos Arquivos"):
         st.markdown("""
         Se precisar analisar um arquivo texto (`.dat` ou `.txt`) linha por linha, lembre-se de que os dados são separados por **vírgulas e entre aspas**:
         * **Primeiras colunas:** Geralmente identificam o código do órgão e o tipo de registro/layout.
         * **Colunas centrais:** Costumam abrigar datas (no formato `AAAAMMDD`) e chaves principais (CPFs, CNPJs ou números de processos).
-        * **Últimas colunas:** Geralmente trazem valores numéricos e a competência de referência (no formato `AAAAMM`).
+        * **Últimas colunas:** Geralmente traz valores numéricos e a competência de referência (no formato `AAAAMM`).
         
-        *Dica de Ouro:* Sempre que o PGI emitir um relatório de ocorrência apontando uma linha, verifique a chave principal (geralmente a coluna de identificação) para localizar rapidamente o registro duplicado ou incorreto no sistema contábil.
+        *Dica de Ouro:* Sempre que o PGI emitir um relatório de ocorrência apontando uma linha, verifique a chave principal para localizar rapidamente o registro duplicado ou incorreto no sistema contábil.
         """)
