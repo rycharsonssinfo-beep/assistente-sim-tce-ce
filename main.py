@@ -60,7 +60,6 @@ def inicializar_banco():
             feedback INTEGER DEFAULT 0
         )
     """)
-    # Garante compatibilidade caso a tabela antiga não tenha a coluna feedback
     cursor.execute("PRAGMA table_info(casos)")
     colunas = [col[1] for col in cursor.fetchall()]
     if "feedback" not in colunas:
@@ -101,13 +100,13 @@ def atualizar_feedback_db(caso_id, novo_valor):
     conn.close()
 
 def exportar_base_json():
-    """Exporta registros do banco para JSON (sem expor IDs internos se preferir)."""
+    """Exporta registros do banco para JSON."""
     historico = carregar_historico_db()
     dados_limpos = [{"erro": item["erro"], "resposta": item["resposta"], "feedback": item["feedback"]} for item in historico]
     return json.dumps(dados_limpos, ensure_ascii=False, indent=4)
 
 def importar_base_json(arquivo_carregado):
-    """Importa e mescla dados de um arquivo JSON externo."""
+    """Importa e mescla dados de um arquivo de backup externo."""
     try:
         conteudo = json.load(arquivo_carregado)
         if isinstance(conteudo, list):
@@ -153,27 +152,32 @@ with st.sidebar:
     st.metric(label="Casos na Base Permanente", value=len(st.session_state["historico_casos"]))
     
     st.markdown("---")
-    st.markdown("### 💾 Gestão da Base (Backup)")
+    st.markdown("### 💾 Salvamento e Cópia")
     
     dados_json_str = exportar_base_json()
     st.download_button(
-        label="📥 Baixar Base (.JSON)",
+        label="📥 Baixar Cópia de Segurança",
         data=dados_json_str,
-        file_name="backup_base_sim_tce.json",
+        file_name="backup_historico_sim_tce.json",
         mime="application/json",
         use_container_width=True,
-        help="Baixe todos os casos salvos para backup de segurança."
+        help="Gera um arquivo com todos os diagnósticos salvos para você guardar no seu computador."
     )
     
-    arquivo_submetido = st.file_uploader("📤 Restaurar Base (.JSON)", type=["json"])
+    arquivo_submetido = st.file_uploader(
+        "📤 Carregar Cópia Salva", 
+        type=["json"],
+        help="Selecione um arquivo de backup gerado anteriormente para recuperar seus casos salvos."
+    )
+    
     if arquivo_submetido is not None:
-        if st.button("🔄 Confirmar Importação", use_container_width=True):
+        if st.button("🔄 Confirmar Restauração", use_container_width=True):
             if importar_base_json(arquivo_submetido):
                 st.session_state["historico_casos"] = carregar_historico_db()
-                st.success("Base de conhecimento restaurada com sucesso!")
+                st.success("Histórico de casos restaurado com sucesso!")
                 st.rerun()
             else:
-                st.error("Erro ao processar o arquivo JSON enviado.")
+                st.error("Erro ao processar o arquivo enviado. Certifique-se de que é um backup válido.")
 
     st.markdown("---")
     st.caption("Desenvolvido para otimização de rotinas contábeis.")
@@ -237,13 +241,11 @@ with aba1:
         if user_input.strip():
             texto_limpo = user_input.strip()
             
-            # Validação Preventiva por Regex: Garante que o texto possui indícios de log do SIM/PGI ou campos técnicos
             tem_estrutura_log = bool(re.search(r'\b([A-Z0-9]+\.(VCL|LCO|PAT|CPF|BAS|DCD|DAT|TXT))\b|cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+|descrição:|ocorrência', texto_limpo, re.IGNORECASE))
             
             if not tem_estrutura_log and len(texto_limpo) < 15:
                 st.warning("⚠️ O texto inserido não parece ser um relatório de erro válido do SIM TCE-CE. Cole um trecho oficial de ocorrência contendo módulos ou campos técnicos.")
             else:
-                # Verifica se já existe no banco
                 caso_existente = next((item for item in st.session_state["historico_casos"] if item["erro"].strip() == texto_limpo), None)
                 
                 if caso_existente:
@@ -334,10 +336,9 @@ with aba2:
 
         casos_atuais = st.session_state["historico_casos"]
 
-        # Implementação da Busca Semântica Leve (TF-IDF + Cosseno) se houver termo digitado
         if termo_busca_historico.strip():
             corpus = [f"{c['erro']} {c['resposta']}" for c in casos_atuais]
-            corpus.append(termo_busca_historico) # Adiciona a busca ao final para vetorização
+            corpus.append(termo_busca_historico)
             
             try:
                 vectorizer = TfidfVectorizer().fit_transform(corpus)
@@ -346,19 +347,13 @@ with aba2:
                 vetores_corpus = vetores[:-1]
                 
                 similaridades = cosine_similarity([vetor_busca], vetores_corpus)[0]
-                
-                # Associa a pontuação de similaridade aos casos
                 casos_com_score = list(zip(casos_atuais, similaridades))
-                # Filtra apenas os que possuem alguma relevância mínima ou ordena por maior similaridade
                 casos_com_score = sorted(casos_com_score, key=lambda x: x[1], reverse=True)
                 
-                # Considera encontrados aqueles com score > 0.02 ou correspondência exata de texto
                 casos_filtrados = [item[0] for item in casos_com_score if item[1] > 0.02 or termo_busca_historico in item[0]['erro'].lower()]
             except Exception:
-                # Fallback seguro caso ocorra erro no TF-IDF
                 casos_filtrados = [c for c in casos_atuais if termo_busca_historico in c['erro'].lower() or termo_busca_historico in c['resposta'].lower()]
         else:
-            # Ordena com prioridade para os casos bem avaliados (feedback == 1)
             casos_filtrados = sorted(casos_atuais, key=lambda x: x['feedback'], reverse=True)
 
         if not casos_filtrados:
@@ -368,7 +363,6 @@ with aba2:
             st.markdown("---")
             
             for idx, caso in enumerate(casos_filtrados):
-                # Prefixo visual indicando feedback positivo/negativo
                 icone_status = "⭐ " if caso['feedback'] == 1 else ("⚠️ " if caso['feedback'] == -1 else "")
                 titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:65]
                 
@@ -379,7 +373,6 @@ with aba2:
                     st.markdown(caso["resposta"])
                     st.markdown("---")
                     
-                    # Sistema de Votação / Feedback (👍 / 👎)
                     col_fb1, col_fb2, col_fb3 = st.columns([2, 2, 6])
                     with col_fb1:
                         if st.button("👍 Resposta Útil", key=f"btn_sim_{caso['id']}"):
