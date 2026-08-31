@@ -150,7 +150,6 @@ def inicializar_banco():
             arquivo TEXT DEFAULT ''
         )
     """)
-    # Migração segura para bases existentes
     cursor.execute("PRAGMA table_info(casos)")
     colunas = [col[1] for col in cursor.fetchall()]
     if "feedback" not in colunas:
@@ -200,7 +199,6 @@ def atualizar_feedback_db(caso_id, novo_valor):
     inicializar_banco()
     conn = sqlite3.connect(NOME_BANCO)
     cursor = conn.cursor()
-    # Feedback positivo marca automaticamente como validado e confianca alta
     validado_val = 1 if novo_valor == 1 else 0
     conf_val = "Alta" if novo_valor == 1 else "Média"
     cursor.execute("UPDATE casos SET feedback = ?, validado = ?, confianca = ? WHERE id = ?", (novo_valor, validado_val, conf_val, caso_id))
@@ -252,7 +250,6 @@ if "historico_casos" not in st.session_state:
 def normalizar_texto(texto):
     if not texto:
         return ""
-    # Remove espaços duplicados, quebras excessivas, padroniza maiúsculas/minúsculas para busca
     t = texto.lower()
     t = re.sub(r'\s+', ' ', t).strip()
     return t
@@ -275,7 +272,6 @@ def classificar_erro(texto):
         arquivo_sigla = ext_match[0][1].upper()
         modulo = modulo_map.get(arquivo_sigla, "Outros Módulos")
     else:
-        # Busca por termos chaves alternativos
         t_lower = texto.lower()
         if "veículo" in t_lower or "vcl" in t_lower:
             arquivo_sigla, modulo = "VCL", "Veículos"
@@ -361,12 +357,10 @@ def buscar_caso_no_historico(texto_entrada):
         
     texto_norm = normalizar_texto(texto_entrada)
     
-    # 1. Busca Exata Normalizada
     for caso in historico:
         if normalizar_texto(caso["erro"]) == texto_norm:
             return caso, "Exata", 1.0
             
-    # 2. Busca Semântica Avançada (TF-IDF + Similaridade + Feedback)
     corpus = [normalizar_texto(c["erro"]) for c in historico]
     corpus.append(texto_norm)
     
@@ -383,7 +377,6 @@ def buscar_caso_no_historico(texto_entrada):
         
         for idx, sim in enumerate(similaridades):
             caso = historico[idx]
-            # Atribui bônus se houver feedback positivo (validado)
             bonus_feedback = 0.15 if caso.get("validado", 0) == 1 else 0.0
             pontuacao_final = sim + bonus_feedback
             
@@ -422,7 +415,7 @@ def chamar_gemini_seguro(prompt, contexto_anterior=None):
     - Se o erro não fornecer dados suficientes para determinar a causa com segurança, informe claramente: "Não foi possível determinar com segurança a causa apenas com o trecho informado." e liste as informações que faltam.
     - Diferencie fatos de inferências.
 
-    Estruture a resposta obrigatoriamente nestas seções:
+    Estruture a resposta obrigatoriamente nestas seções (com quebras de linha limpas):
     ### CAUSA DO ERRO
     Explicação simples do problema.
 
@@ -553,7 +546,6 @@ with aba1:
         placeholder="Cole o trecho do erro aqui..."
     )
 
-    # Proteção de limite de caracteres
     num_chars = len(user_input)
     st.caption(f"Caracteres: {num_chars} / {LIMITE_CARACTERES}")
 
@@ -585,12 +577,9 @@ with aba1:
         else:
             sigla_arq, modulo_identificado = classificar_erro(texto_limpo)
             
-            # ORDEM DE INTELIGÊNCIA E REAPROVEITAMENTO:
-            # 1. Base de Conhecimento Estruturada
             resposta_obtida, confianca_obtida = buscar_na_base_conhecimento(texto_limpo)
             origem_resposta = "Base de Conhecimento"
             
-            # 2. Histórico (Exato ou Semelhante Validado)
             if not resposta_obtida:
                 caso_encontrado, tipo_match, score = buscar_caso_no_historico(texto_limpo)
                 if caso_encontrado and (tipo_match in ["Exata", "Validado e Semelhante"] or score >= 0.70):
@@ -598,10 +587,8 @@ with aba1:
                     confianca_obtida = caso_encontrado.get("confianca", "Alta" if tipo_match=="Exata" else "Média")
                     origem_resposta = f"Histórico Permanente ({tipo_match})"
             
-            # 3. Consulta IA Gemini (Somente se necessário)
             if not resposta_obtida:
                 with st.spinner("Analisando leiaute e consultando diretrizes de suporte..."):
-                    # Verifica se há caso parcialmente semelhante para fornecer contexto à IA
                     caso_parcial, _, _ = buscar_caso_no_historico(texto_limpo)
                     contexto_auxiliar = caso_parcial["resposta"] if caso_parcial else None
                     
@@ -611,7 +598,6 @@ with aba1:
                         resposta_obtida = resp_ia
                         confianca_obtida = "Média" if "Média" in resp_ia else "Alta"
                         origem_resposta = "Inteligência Artificial (Gemini)"
-                        # Salva automaticamente na base com status não validado inicialmente
                         salvar_caso_db(texto_limpo, resposta_obtida, confianca=confianca_obtida, validado=0, modulo=modulo_identificado, arquivo=sigla_arq)
                         st.session_state["historico_casos"] = carregar_historico_db()
                     else:
@@ -622,19 +608,24 @@ with aba1:
                 st.markdown("---")
                 st.success(f"Diagnóstico obtido com sucesso via **{origem_resposta}**!")
                 
-                # Exibição do nível de confiança visual
                 cor_conf = "#166534" if confianca_obtida == "Alta" else ("#B45309" if confianca_obtida == "Média" else "#991B1B")
                 bg_conf = "#DCFCE7" if confianca_obtida == "Alta" else ("#FEF3C7" if confianca_obtida == "Média" else "#FEF2F2")
                 
+                # Cabeçalho do Card separado do conteúdo para evitar conflito com Streamlit containers
                 st.markdown(f"""
                     <div style='display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #CBD5E1; border-radius: 8px 8px 0 0; padding: 14px 24px; border-bottom: none;'>
                         <span style='font-weight: 600; color: #0F172A;'>Diagnóstico e Orientação Técnica</span>
                         <span style='background-color: {bg_conf}; color: {cor_conf}; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;'>Nível de Confiabilidade: {confianca_obtida}</span>
                     </div>
-                    <div style='background: white; border: 1px solid #CBD5E1; border-radius: 0 0 8px 8px; padding: 24px;'>
-                        {resposta_obtida}
-                    </div>
                 """, unsafe_allow_html=True)
+                
+                # Conteúdo markdown renderizado nativamente de forma limpa pelo Streamlit
+                with st.container():
+                    st.markdown(f"""
+                    <div style='background: white; border: 1px solid #CBD5E1; border-top: none; border-radius: 0 0 8px 8px; padding: 24px; margin-top: -10px; margin-bottom: 20px;'>
+                    """, unsafe_allow_html=True)
+                    st.markdown(resposta_obtida)
+                    st.markdown("</div>", unsafe_allow_html=True)
 
 # ------------------------------------------
 # ABA 2: HISTÓRICO COM BUSCA HÍBRIDA E FEEDBACK
@@ -662,7 +653,6 @@ with aba2:
                 if termo_norm in normalizar_texto(c["erro"]) or termo_norm in normalizar_texto(c["resposta"]) or termo_norm in normalizar_texto(c.get("modulo", "")):
                     casos_filtrados.append(c)
         else:
-            # Ordena priorizando validados e feedback positivo
             casos_filtrados = sorted(casos_atuais, key=lambda x: (x.get('validado', 0), x.get('feedback', 0)), reverse=True)
 
         if not casos_filtrados:
@@ -675,7 +665,6 @@ with aba2:
                 titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:65]
                 
                 with st.expander(f"Caso #{caso['id']} — {titulo_resumo}  [{caso.get('modulo', 'Geral')}]"):
-                    # Badge de status interno
                     if caso.get('validado', 0) == 1 or caso.get('feedback', 0) == 1:
                         st.markdown("<span style='background-color: #DCFCE7; color: #166534; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #BBF7D0;'>Status: Aprovado e Validado</span>", unsafe_allow_html=True)
                     elif caso.get('feedback', 0) == -1:
