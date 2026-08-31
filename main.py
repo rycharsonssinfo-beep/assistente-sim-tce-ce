@@ -9,7 +9,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM (CARDS E BLOCOS)
+# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM
 # ==========================================
 st.set_page_config(
     page_title="Assistente SIM TCE-CE",
@@ -130,9 +130,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. PERSISTÊNCIA ROBUSTA (SQLITE + FEEDBACK)
+# 2. PERSISTÊNCIA E MIGRAÇÃO ROBUSTA (SQLITE)
 # ==========================================
 NOME_BANCO = "banco_sim_tce.db"
+LIMITE_CARACTERES = 3000
 
 def inicializar_banco():
     conn = sqlite3.connect(NOME_BANCO)
@@ -142,13 +143,26 @@ def inicializar_banco():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             erro TEXT UNIQUE,
             resposta TEXT,
-            feedback INTEGER DEFAULT 0
+            feedback INTEGER DEFAULT 0,
+            confianca TEXT DEFAULT 'Média',
+            validado INTEGER DEFAULT 0,
+            modulo TEXT DEFAULT 'Não identificado',
+            arquivo TEXT DEFAULT ''
         )
     """)
+    # Migração segura para bases existentes
     cursor.execute("PRAGMA table_info(casos)")
     colunas = [col[1] for col in cursor.fetchall()]
     if "feedback" not in colunas:
         cursor.execute("ALTER TABLE casos ADD COLUMN feedback INTEGER DEFAULT 0")
+    if "confianca" not in colunas:
+        cursor.execute("ALTER TABLE casos ADD COLUMN confianca TEXT DEFAULT 'Média'")
+    if "validado" not in colunas:
+        cursor.execute("ALTER TABLE casos ADD COLUMN validado INTEGER DEFAULT 0")
+    if "modulo" not in colunas:
+        cursor.execute("ALTER TABLE casos ADD COLUMN modulo TEXT DEFAULT 'Não identificado'")
+    if "arquivo" not in colunas:
+        cursor.execute("ALTER TABLE casos ADD COLUMN arquivo TEXT DEFAULT ''")
     conn.commit()
     conn.close()
 
@@ -156,17 +170,26 @@ def carregar_historico_db():
     inicializar_banco()
     conn = sqlite3.connect(NOME_BANCO)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, erro, resposta, feedback FROM casos ORDER BY id DESC")
+    cursor.execute("SELECT id, erro, resposta, feedback, confianca, validado, modulo, arquivo FROM casos ORDER BY id DESC")
     dados = cursor.fetchall()
     conn.close()
-    return [{"id": row[0], "erro": row[1], "resposta": row[2], "feedback": row[3]} for row in dados]
+    return [{
+        "id": row[0], "erro": row[1], "resposta": row[2], 
+        "feedback": row[3], "confianca": row[4], "validado": row[5],
+        "modulo": row[6], "arquivo": row[7]
+    } for row in dados]
 
-def salvar_caso_db(erro, resposta):
+def salvar_caso_db(erro, resposta, confianca="Média", validado=0, modulo="Não identificado", arquivo=""):
     inicializar_banco()
+    if not erro or not resposta or len(resposta.strip()) < 10:
+        return
     conn = sqlite3.connect(NOME_BANCO)
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT OR IGNORE INTO casos (erro, resposta, feedback) VALUES (?, ?, 0)", (erro, resposta))
+        cursor.execute("""
+            INSERT OR IGNORE INTO casos (erro, resposta, feedback, confianca, validado, modulo, arquivo) 
+            VALUES (?, ?, 0, ?, ?, ?, ?)
+        """, (erro.strip(), resposta.strip(), confianca, validado, modulo, arquivo))
         conn.commit()
     except Exception as e:
         print(f"Erro ao inserir no banco: {e}")
@@ -177,13 +200,20 @@ def atualizar_feedback_db(caso_id, novo_valor):
     inicializar_banco()
     conn = sqlite3.connect(NOME_BANCO)
     cursor = conn.cursor()
-    cursor.execute("UPDATE casos SET feedback = ? WHERE id = ?", (novo_valor, caso_id))
+    # Feedback positivo marca automaticamente como validado e confianca alta
+    validado_val = 1 if novo_valor == 1 else 0
+    conf_val = "Alta" if novo_valor == 1 else "Média"
+    cursor.execute("UPDATE casos SET feedback = ?, validado = ?, confianca = ? WHERE id = ?", (novo_valor, validado_val, conf_val, caso_id))
     conn.commit()
     conn.close()
 
 def exportar_base_json():
     historico = carregar_historico_db()
-    dados_limpos = [{"erro": item["erro"], "resposta": item["resposta"], "feedback": item["feedback"]} for item in historico]
+    dados_limpos = [{
+        "erro": item["erro"], "resposta": item["resposta"], 
+        "feedback": item["feedback"], "confianca": item["confianca"],
+        "validado": item["validado"], "modulo": item["modulo"], "arquivo": item["arquivo"]
+    } for item in historico]
     return json.dumps(dados_limpos, ensure_ascii=False, indent=4)
 
 def importar_base_json(arquivo_carregado):
@@ -193,22 +223,186 @@ def importar_base_json(arquivo_carregado):
             inicializar_banco()
             conn = sqlite3.connect(NOME_BANCO)
             cursor = conn.cursor()
+            importados = 0
             for item in conteudo:
-                if "erro" in item and "resposta" in item:
+                if "erro" in item and "resposta" in item and item["erro"].strip() and item["resposta"].strip():
                     fb = item.get("feedback", 0)
-                    cursor.execute("INSERT OR IGNORE INTO casos (erro, resposta, feedback) VALUES (?, ?, ?)", (item["erro"], item["resposta"], fb))
+                    val = item.get("validado", 1 if fb == 1 else 0)
+                    conf = item.get("confianca", "Média")
+                    mod = item.get("modulo", "Não identificado")
+                    arq = item.get("arquivo", "")
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO casos (erro, resposta, feedback, confianca, validado, modulo, arquivo) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (item["erro"], item["resposta"], fb, conf, val, mod, arq))
+                    importados += 1
             conn.commit()
             conn.close()
-            return True
+            return True, importados
     except Exception as e:
         print(f"Erro na importação: {e}")
-    return False
+    return False, 0
 
 if "historico_casos" not in st.session_state:
     st.session_state["historico_casos"] = carregar_historico_db()
 
 # ==========================================
-# 3. CONFIGURAÇÃO DA API GEMINI
+# 3. UTILITÁRIOS DE NORMALIZAÇÃO E CLASSIFICAÇÃO
+# ==========================================
+def normalizar_texto(texto):
+    if not texto:
+        return ""
+    # Remove espaços duplicados, quebras excessivas, padroniza maiúsculas/minúsculas para busca
+    t = texto.lower()
+    t = re.sub(r'\s+', ' ', t).strip()
+    return t
+
+def classificar_erro(texto):
+    ext_match = re.findall(r'\b([A-Z0-9]+)\.(VCL|LCO|PAT|CPF|BAS|DCD|DAT|TXT)\b', texto, re.IGNORECASE)
+    modulo_map = {
+        "VCL": "Veículos",
+        "LCO": "Contratos e Aditivos",
+        "PAT": "Patrimônio",
+        "CPF": "Recursos Humanos / Pessoal",
+        "BAS": "Cadastros Básicos",
+        "DCD": "Dívida Consolidada"
+    }
+    
+    arquivo_sigla = ""
+    modulo = "Não identificado"
+    
+    if ext_match:
+        arquivo_sigla = ext_match[0][1].upper()
+        modulo = modulo_map.get(arquivo_sigla, "Outros Módulos")
+    else:
+        # Busca por termos chaves alternativos
+        t_lower = texto.lower()
+        if "veículo" in t_lower or "vcl" in t_lower:
+            arquivo_sigla, modulo = "VCL", "Veículos"
+        elif "contrato" in t_lower or "lco" in t_lower:
+            arquivo_sigla, modulo = "LCO", "Contratos e Aditivos"
+        elif "patrimônio" in t_lower or "pat" in t_lower:
+            arquivo_sigla, modulo = "PAT", "Patrimônio"
+        elif "servidor" in t_lower or "folha" in t_lower or "cpf" in t_lower:
+            arquivo_sigla, modulo = "CPF", "Recursos Humanos / Pessoal"
+            
+    return arquivo_sigla, modulo
+
+# ==========================================
+# 4. BASE DE CONHECIMENTO EXTERNALIZADA (JSON/ESTRUTURADA)
+# ==========================================
+BASE_CONHECIMENTO_PADRAO = [
+    {
+        "chaves": ["unidades_orcamentarias", "cd_municipio", "dt_versao_orc", "cd_orgao", "cd_unid_orc", ".vcl", ".pat"],
+        "titulo": "Erros de Unidades Orçamentárias e Vínculos",
+        "resposta": """### 🎯 Causa Raiz em Linguagem Simples
+O sistema SIM/TCE-CE exige que os arquivos de movimentação (como veículos ou patrimônio) estejam vinculados a uma unidade orçamentária válida e previamente cadastrada na competência orçamentária oficial.
+
+### 📍 Onde Encontrar e O Que Significa Cada Campo
+- `cd_municipio`: Código oficial do município regulado pelo IBGE.
+- `dt_versao_orc`: Data da versão do orçamento vigente. Deve ser idêntica à LOA enviada.
+- `cd_orgao` e `cd_unid_orc`: Órgão e Unidade Orçamentária responsáveis.
+
+### ✅ Diretrizes Práticas de Correção
+1. Certifique-se de que a carga dos arquivos orçamentários básicos foi transmitida e aprovada **antes** dos módulos subsidiários.
+2. Confira se a data da versão do orçamento informada bate exatamente com a remessa oficial.
+
+### ATENÇÃO
+Não avance para arquivos analíticos sem antes garantir a consistência dos cadastros básicos orçamentários.
+""",
+        "confianca": "Alta"
+    },
+    {
+        "chaves": ["contrato", "aditivo", "ordenador", ".lco", "cpf_responsavel"],
+        "titulo": "Erros em Contratos, Aditivos e Ordenadores",
+        "resposta": """### 🎯 Causa Raiz em Linguagem Simples
+Inconsistência na amarração entre termos aditivos/contratos e o cadastro de gestores autorizados (ordenadores de despesa).
+
+### 📍 Onde Encontrar e O Que Significa Cada Campo
+- `nu_contrato` / `aa_contrato`: Número e ano do contrato original.
+- `cpf_responsavel`: CPF do ordenador autorizado no período.
+
+### ✅ Diretrizes Práticas de Correção
+1. O contrato original deve constar obrigatoriamente na remessa da competência correta.
+2. O CPF do ordenador de despesa deve estar ativo no cadastro de agentes públicos da competência.
+
+### ATENÇÃO
+Verifique se houve substituição de gestor não informada nas remessas de agentes públicos.
+""",
+        "confianca": "Alta"
+    }
+]
+
+def buscar_na_base_conhecimento(texto_erro):
+    t_norm = normalizar_texto(texto_erro)
+    melhor_match = None
+    max_pontos = 0
+    
+    for item in BASE_CONHECIMENTO_PADRAO:
+        pontos = 0
+        for chave in item["chaves"]:
+            if chave.lower() in t_norm:
+                pontos += 1
+        if pontos > max_pontos:
+            max_pontos = pontos
+            melhor_match = item
+            
+    if max_pontos > 0 and melhor_match:
+        return melhor_match["resposta"], melhor_match["confianca"]
+    return None, None
+
+# ==========================================
+# 5. BUSCA HÍBRIDA E INTELIGENTE NO HISTÓRICO
+# ==========================================
+def buscar_caso_no_historico(texto_entrada):
+    historico = st.session_state["historico_casos"]
+    if not historico:
+        return None, "Nenhum", 0.0
+        
+    texto_norm = normalizar_texto(texto_entrada)
+    
+    # 1. Busca Exata Normalizada
+    for caso in historico:
+        if normalizar_texto(caso["erro"]) == texto_norm:
+            return caso, "Exata", 1.0
+            
+    # 2. Busca Semântica Avançada (TF-IDF + Similaridade + Feedback)
+    corpus = [normalizar_texto(c["erro"]) for c in historico]
+    corpus.append(texto_norm)
+    
+    try:
+        vectorizer = TfidfVectorizer().fit(corpus)
+        vetores = vectorizer.transform(corpus).toarray()
+        vetor_busca = vetores[-1]
+        vetores_historico = vetores[:-1]
+        
+        similaridades = cosine_similarity([vetor_busca], vetores_historico)[0]
+        
+        melhor_idx = -1
+        maior_pontuacao = -1.0
+        
+        for idx, sim in enumerate(similaridades):
+            caso = historico[idx]
+            # Atribui bônus se houver feedback positivo (validado)
+            bonus_feedback = 0.15 if caso.get("validado", 0) == 1 else 0.0
+            pontuacao_final = sim + bonus_feedback
+            
+            if pontuacao_final > maior_pontuacao:
+                maior_pontuacao = pontuacao_final
+                melhor_idx = idx
+                
+        if melhor_idx != -1 and maior_pontuacao >= 0.35:
+            caso_encontrado = historico[melhor_idx]
+            tipo_match = "Validado e Semelhante" if caso_encontrado.get("validado", 0) == 1 else "Semelhante"
+            return caso_encontrado, tipo_match, float(maior_pontuacao)
+            
+    except Exception as e:
+        print(f"Erro na busca semântica: {e}")
+        
+    return None, "Nenhum", 0.0
+
+# ==========================================
+# 6. CONFIGURAÇÃO DA API GEMINI E TRATAMENTO DE ERROS
 # ==========================================
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
@@ -217,8 +411,61 @@ if not api_key:
 else:
     genai.configure(api_key=api_key)
 
+def chamar_gemini_seguro(prompt, contexto_anterior=None):
+    modelos_disponiveis = ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-flash"]
+    
+    prompt_estruturado = f"""
+    Atue rigorosamente como um analista de suporte técnico especialista no sistema SIM do TCE-CE.
+    Siga com extrema rigidez estas diretrizes:
+    - Utilize EXCLUSIVAMENTE as informações fornecidas no erro e no contexto abaixo.
+    - NUNCA invente nomes de telas, menus, procedimentos, comandos SQL ou regras que não estejam explícitas.
+    - Se o erro não fornecer dados suficientes para determinar a causa com segurança, informe claramente: "Não foi possível determinar com segurança a causa apenas com o trecho informado." e liste as informações que faltam.
+    - Diferencie fatos de inferências.
+
+    Estruture a resposta obrigatoriamente nestas seções:
+    ### CAUSA DO ERRO
+    Explicação simples do problema.
+
+    ### CAMPOS OU INFORMAÇÕES ENVOLVIDAS
+    Identificação dos campos técnicos encontrados.
+
+    ### COMO CORRIGIR
+    Passos objetivos e seguros.
+
+    ### ATENÇÃO
+    Informações importantes ou limitações.
+
+    ### NÍVEL DE CONFIANÇA
+    (Alta / Média / Baixa)
+
+    {f"Contexto de caso anterior validado para referência: {contexto_anterior}" if contexto_anterior else ""}
+
+    Erro reportado:
+    {prompt}
+    """
+    
+    for nome_modelo in modelos_disponiveis:
+        for tentativa in range(2):
+            try:
+                model = genai.GenerativeModel(nome_modelo)
+                response = model.generate_content(prompt_estruturado, generation_config={"temperature": 0.1, "max_output_tokens": 4096})
+                if response and response.text:
+                    return response.text, "Sucesso"
+            except Exception as err:
+                err_str = str(err).lower()
+                if "429" in err_str or "quota" in err_str:
+                    time.sleep(2 * (tentativa + 1))
+                    continue
+                elif "api_key" in err_str or "authentication" in err_str:
+                    return None, "Erro de Autenticação: Verifique sua chave de API."
+                elif "timeout" in err_str or "deadline" in err_str:
+                    return None, "Erro de Timeout: A API demorou muito para responder. Tente novamente."
+                else:
+                    break
+    return None, "Erro 429 / Limite de requisições excedido ou indisponibilidade temporária da API."
+
 # ==========================================
-# 4. BARRA LATERAL (SIDEBAR COM BLOCOS)
+# 7. BARRA LATERAL (SIDEBAR COM BLOCOS)
 # ==========================================
 with st.sidebar:
     st.markdown("### SIM TCE-CE")
@@ -226,7 +473,7 @@ with st.sidebar:
     st.markdown("---")
     
     st.markdown("**Sobre a Ferramenta**")
-    st.markdown("<span style='font-size: 13px; color: #334155;'>Plataforma com busca semântica, feedback de utilidade e persistência SQLite para apoio na validação de layouts.</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size: 13px; color: #334155;'>Plataforma inteligente com busca híbrida, curadoria de conhecimento validado e persistência SQLite.</span>", unsafe_allow_html=True)
     
     st.markdown("---")
     st.markdown("**Base Permanente**")
@@ -253,18 +500,19 @@ with st.sidebar:
     
     if arquivo_submetido is not None:
         if st.button("Confirmar restauração", use_container_width=True):
-            if importar_base_json(arquivo_submetido):
+            sucesso_imp, qtd_imp = importar_base_json(arquivo_submetido)
+            if sucesso_imp:
                 st.session_state["historico_casos"] = carregar_historico_db()
-                st.success("Histórico restaurado com sucesso.")
+                st.success(f"Histórico restaurado com sucesso! {qtd_imp} registro(s) processados.")
                 st.rerun()
             else:
-                st.error("Erro ao processar o arquivo enviado.")
+                st.error("Erro ao processar o arquivo enviado ou formato JSON inválido.")
 
     st.markdown("---")
     st.caption("Desenvolvido para otimização de rotinas contábeis.")
 
 # ==========================================
-# 5. TELA PRINCIPAL E ABAS
+# 8. TELA PRINCIPAL E ABAS
 # ==========================================
 st.markdown("### Assistente de Diagnóstico SIM TCE-CE")
 st.markdown("<span style='color: #334155; font-size: 15px;'>Central inteligente de análise de consistências, tradução de logs e consulta de orientações técnicas.</span>", unsafe_allow_html=True)
@@ -305,142 +553,117 @@ with aba1:
         placeholder="Cole o trecho do erro aqui..."
     )
 
+    # Proteção de limite de caracteres
+    num_chars = len(user_input)
+    st.caption(f"Caracteres: {num_chars} / {LIMITE_CARACTERES}")
+
+    if num_chars > LIMITE_CARACTERES:
+        st.warning("O relatório informado é muito extenso. Envie preferencialmente o trecho relacionado à ocorrência para melhor assertividade.")
+
     if user_input.strip():
-        encontrou_ext = re.findall(r'\b[A-Z0-9]+\.(VCL|LCO|PAT|CPF|BAS|DCD)\b', user_input, re.IGNORECASE)
+        sigla_arq, modulo_identificado = classificar_erro(user_input)
         encontrou_campos = re.findall(r'cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+', user_input, re.IGNORECASE)
         
         badges_html = "<div style='display: flex; gap: 8px; margin: 12px 0 16px 0; flex-wrap: wrap; align-items: center;'>"
-        if encontrou_ext:
-            badges_html += f"<span style='background-color: #E0F2FE; color: #0369A1; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #7DD3FC;'>Módulo: {encontrou_ext[0][0].upper()}</span>"
+        if sigla_arq:
+            badges_html += f"<span style='background-color: #E0F2FE; color: #0369A1; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #7DD3FC;'>Módulo: {modulo_identificado} (.</span><span style='background-color: #E0F2FE; color: #0369A1; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #7DD3FC;'>{sigla_arq})</span>"
         if encontrou_campos:
             amostra_campos = ", ".join(set(encontrou_campos[:4]))
             badges_html += f"<span style='background-color: #FEF3C7; color: #B45309; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #FCD34D;'>Chaves: {amostra_campos}</span>"
         badges_html += "</div>"
             
-        if encontrou_ext or encontrou_campos:
-            st.markdown(badges_html, unsafe_allow_html=True)
+        st.markdown(badges_html, unsafe_allow_html=True)
 
     st.markdown("")
     if st.button("Processar Análise Técnica", type="primary", use_container_width=True):
-        if user_input.strip():
-            texto_limpo = user_input.strip()
-            
-            tem_estrutura_log = bool(re.search(r'\b([A-Z0-9]+\.(VCL|LCO|PAT|CPF|BAS|DCD|DAT|TXT))\b|cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+|descrição:|ocorrência', texto_limpo, re.IGNORECASE))
-            
-            if not tem_estrutura_log and len(texto_limpo) < 15:
-                st.warning("O texto inserido não parece ser um relatório de erro válido do SIM TCE-CE. Cole um trecho oficial de ocorrência contendo módulos ou campos técnicos.")
-            else:
-                caso_existente = next((item for item in st.session_state["historico_casos"] if item["erro"].strip() == texto_limpo), None)
-                
-                if caso_existente:
-                    st.markdown("---")
-                    st.success("Diagnóstico recuperado instantaneamente do Banco de Dados Permanente.")
-                    st.markdown("##### Diagnóstico e Orientação Técnica")
-                    st.markdown(f"<div style='background: white; border: 1px solid #CBD5E1; border-radius: 8px; padding: 24px; margin-top: 12px;'>{caso_existente['resposta']}</div>", unsafe_allow_html=True)
-                else:
-                    with st.spinner("Analisando leiaute e consultando diretrizes de suporte..."):
-                        resposta_obtida = None
-                        sucesso = False
-                        
-                        modelos_para_tentar = ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
-                        
-                        prompt = f"""
-                        Atue como um analista de suporte técnico especialista no sistema SIM do TCE-CE, com foco em uma linguagem simples, clara e didática.
-                        Analise o erro de validação de dados abaixo (retirado de relatórios oficiais de ocorrência). 
-                        
-                        Forneça um diagnóstico estruturado estritamente nas seguintes partes:
-                        
-                        ### 🎯 Causa Raiz em Linguagem Simples
-                        (Explique o motivo da inconsistência de forma descomplicada, traduzindo o que o erro significa na prática para o usuário).
-
-                        ### 📍 Onde Encontrar e O Que Significa Cada Campo
-                        (Identifique os campos técnicos citados no erro - como cd_municipio, dt_versao_orc, cd_orgao, nu_registro_bem, etc. Explique qual é a função de cada um deles no leiaute e em qual parte/contexto do arquivo eles devem ser conferidos).
-
-                        ### ✅ Diretrizes Práticas de Correção
-                        (Forneça orientações passo a passo claras e diretas de como o usuário deve proceder no sistema de origem ou no arquivo para resolver o problema).
-
-                        REGRAS OBRIGATÓRIAS:
-                        - Use uma linguagem amigável, didática e de fácil compreensão.
-                        - NUNCA invente nomes de módulos ou telas de ERP. 
-                        - NÃO utilize scripts SQL ou comandos de banco de dados.
-                        - Certifique-se de concluir a resposta inteira sem cortes.
-
-                        Erro reportado:
-                        {texto_limpo}
-                        """
-                        
-                        for nome_modelo in modelos_para_tentar:
-                            tentativas = 2
-                            for tentativa in range(tentativas):
-                                try:
-                                    model = genai.GenerativeModel(nome_modelo)
-                                    response = model.generate_content(prompt, generation_config={"temperature": 0.2, "max_output_tokens": 4096})
-                                    if response and response.text:
-                                        resposta_obtida = response.text
-                                        sucesso = True
-                                        break
-                                except Exception as err:
-                                    err_str = str(err).lower()
-                                    if "429" in err_str or "quota" in err_str:
-                                        time.sleep(3 * (tentativa + 1))
-                                        continue
-                                    else:
-                                        break
-                            if sucesso:
-                                break
-
-                        if sucesso and resposta_obtida:
-                            salvar_caso_db(texto_limpo, resposta_obtida)
-                            st.session_state["historico_casos"] = carregar_historico_db()
-                            
-                            st.markdown("---")
-                            st.success("Análise concluída com sucesso e gravada no Banco de Dados SQLite.")
-                            st.markdown("##### Diagnóstico e Orientação Técnica")
-                            st.markdown(f"<div style='background: white; border: 1px solid #CBD5E1; border-radius: 8px; padding: 24px; margin-top: 12px;'>{resposta_obtida}</div>", unsafe_allow_html=True)
-                        else:
-                            st.error("O limite de requisições gratuitas da API foi atingido (Erro 429). O sistema tentou modelos alternativos, mas todos retornaram sobrecarga momentânea.")
-                            st.info("Dica: Aguarde alguns segundos ou pesquise na aba Histórico Permanente se este caso já foi solucionado anteriormente.")
-        else:
+        texto_limpo = user_input.strip()
+        
+        if not texto_limpo:
             st.warning("Por favor, insira ou carregue um texto de erro antes de processar a análise.")
+        elif len(texto_limpo) < 10:
+            st.warning("O texto inserido é muito curto para uma análise técnica válida.")
+        else:
+            sigla_arq, modulo_identificado = classificar_erro(texto_limpo)
+            
+            # ORDEM DE INTELIGÊNCIA E REAPROVEITAMENTO:
+            # 1. Base de Conhecimento Estruturada
+            resposta_obtida, confianca_obtida = buscar_na_base_conhecimento(texto_limpo)
+            origem_resposta = "Base de Conhecimento"
+            
+            # 2. Histórico (Exato ou Semelhante Validado)
+            if not resposta_obtida:
+                caso_encontrado, tipo_match, score = buscar_caso_no_historico(texto_limpo)
+                if caso_encontrado and (tipo_match in ["Exata", "Validado e Semelhante"] or score >= 0.70):
+                    resposta_obtida = caso_encontrado["resposta"]
+                    confianca_obtida = caso_encontrado.get("confianca", "Alta" if tipo_match=="Exata" else "Média")
+                    origem_resposta = f"Histórico Permanente ({tipo_match})"
+            
+            # 3. Consulta IA Gemini (Somente se necessário)
+            if not resposta_obtida:
+                with st.spinner("Analisando leiaute e consultando diretrizes de suporte..."):
+                    # Verifica se há caso parcialmente semelhante para fornecer contexto à IA
+                    caso_parcial, _, _ = buscar_caso_no_historico(texto_limpo)
+                    contexto_auxiliar = caso_parcial["resposta"] if caso_parcial else None
+                    
+                    resp_ia, status_ia = chamar_gemini_seguro(texto_limpo, contexto_anterior=contexto_auxiliar)
+                    
+                    if resp_ia and status_ia == "Sucesso":
+                        resposta_obtida = resp_ia
+                        confianca_obtida = "Média" if "Média" in resp_ia else "Alta"
+                        origem_resposta = "Inteligência Artificial (Gemini)"
+                        # Salva automaticamente na base com status não validado inicialmente
+                        salvar_caso_db(texto_limpo, resposta_obtida, confianca=confianca_obtida, validado=0, modulo=modulo_identificado, arquivo=sigla_arq)
+                        st.session_state["historico_casos"] = carregar_historico_db()
+                    else:
+                        st.error(f"Falha na consulta ao serviço de IA: {status_ia}")
+                        resposta_obtida = None
+
+            if resposta_obtida:
+                st.markdown("---")
+                st.success(f"Diagnóstico obtido com sucesso via **{origem_resposta}**!")
+                
+                # Exibição do nível de confiança visual
+                cor_conf = "#166534" if confianca_obtida == "Alta" else ("#B45309" if confianca_obtida == "Média" else "#991B1B")
+                bg_conf = "#DCFCE7" if confianca_obtida == "Alta" else ("#FEF3C7" if confianca_obtida == "Média" else "#FEF2F2")
+                
+                st.markdown(f"""
+                    <div style='display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #CBD5E1; border-radius: 8px 8px 0 0; padding: 14px 24px; border-bottom: none;'>
+                        <span style='font-weight: 600; color: #0F172A;'>Diagnóstico e Orientação Técnica</span>
+                        <span style='background-color: {bg_conf}; color: {cor_conf}; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;'>Nível de Confiabilidade: {confianca_obtida}</span>
+                    </div>
+                    <div style='background: white; border: 1px solid #CBD5E1; border-radius: 0 0 8px 8px; padding: 24px;'>
+                        {resposta_obtida}
+                    </div>
+                """, unsafe_allow_html=True)
 
 # ------------------------------------------
-# ABA 2: HISTÓRICO COM BUSCA SEMÂNTICA E FEEDBACK
+# ABA 2: HISTÓRICO COM BUSCA HÍBRIDA E FEEDBACK
 # ------------------------------------------
 with aba2:
     st.markdown("")
     st.markdown("##### Repositório de Casos Resolvidos")
-    st.markdown("<span style='font-size: 13px; color: #475569;'>Consulte os casos salvos utilizando busca inteligente por similaridade e avalie a utilidade das respostas.</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size: 13px; color: #475569;'>Consulte os casos salvos utilizando busca inteligente e avalie a utilidade das respostas.</span>", unsafe_allow_html=True)
     st.markdown("")
 
     if not st.session_state["historico_casos"]:
         st.info("Ainda não há casos salvos na base permanente. Realize sua primeira análise na aba de Diagnóstico.")
     else:
         termo_busca_historico = st.text_input(
-            "Pesquisa Semântica no Histórico", 
-            placeholder="Digite termos vagos ou descrições (ex: erro de chave, unidades, patrimônio)..."
+            "Pesquisa no Histórico", 
+            placeholder="Digite termos ou descrições (ex: erro de chave, unidades, patrimônio)..."
         ).lower()
 
         casos_atuais = st.session_state["historico_casos"]
 
         if termo_busca_historico.strip():
-            corpus = [f"{c['erro']} {c['resposta']}" for c in casos_atuais]
-            corpus.append(termo_busca_historico)
-            
-            try:
-                vectorizer = TfidfVectorizer().fit_transform(corpus)
-                vetores = vectorizer.toarray()
-                vetor_busca = vetores[-1]
-                vetores_corpus = vetores[:-1]
-                
-                similaridades = cosine_similarity([vetor_busca], vetores_corpus)[0]
-                casos_com_score = list(zip(casos_atuais, similaridades))
-                casos_com_score = sorted(casos_com_score, key=lambda x: x[1], reverse=True)
-                
-                casos_filtrados = [item[0] for item in casos_com_score if item[1] > 0.02 or termo_busca_historico in item[0]['erro'].lower()]
-            except Exception:
-                casos_filtrados = [c for c in casos_atuais if termo_busca_historico in c['erro'].lower() or termo_busca_historico in c['resposta'].lower()]
+            casos_filtrados = []
+            termo_norm = normalizar_texto(termo_busca_historico)
+            for c in casos_atuais:
+                if termo_norm in normalizar_texto(c["erro"]) or termo_norm in normalizar_texto(c["resposta"]) or termo_norm in normalizar_texto(c.get("modulo", "")):
+                    casos_filtrados.append(c)
         else:
-            casos_filtrados = sorted(casos_atuais, key=lambda x: x['feedback'], reverse=True)
+            # Ordena priorizando validados e feedback positivo
+            casos_filtrados = sorted(casos_atuais, key=lambda x: (x.get('validado', 0), x.get('feedback', 0)), reverse=True)
 
         if not casos_filtrados:
             st.warning("Nenhum caso correspondente encontrado na base permanente com este critério.")
@@ -451,12 +674,11 @@ with aba2:
             for idx, caso in enumerate(casos_filtrados):
                 titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:65]
                 
-                # Título limpo no expander (sem HTML bruto)
-                with st.expander(f"Caso #{caso['id']} — {titulo_resumo}"):
-                    # Badge de status renderizado corretamente na parte interna superior do card
-                    if caso['feedback'] == 1:
-                        st.markdown("<span style='background-color: #DCFCE7; color: #166534; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #BBF7D0;'>Status: Aprovado</span>", unsafe_allow_html=True)
-                    elif caso['feedback'] == -1:
+                with st.expander(f"Caso #{caso['id']} — {titulo_resumo}  [{caso.get('modulo', 'Geral')}]"):
+                    # Badge de status interno
+                    if caso.get('validado', 0) == 1 or caso.get('feedback', 0) == 1:
+                        st.markdown("<span style='background-color: #DCFCE7; color: #166534; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #BBF7D0;'>Status: Aprovado e Validado</span>", unsafe_allow_html=True)
+                    elif caso.get('feedback', 0) == -1:
                         st.markdown("<span style='background-color: #FEF2F2; color: #991B1B; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #FECACA;'>Status: Requer atenção</span>", unsafe_allow_html=True)
                     else:
                         st.markdown("<span style='background-color: #F1F5F9; color: #475569; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #E2E8F0;'>Status: Não avaliado</span>", unsafe_allow_html=True)
@@ -473,7 +695,7 @@ with aba2:
                         if st.button("Resposta útil", key=f"btn_sim_{caso['id']}"):
                             atualizar_feedback_db(caso['id'], 1)
                             st.session_state["historico_casos"] = carregar_historico_db()
-                            st.success("Caso marcado como útil.")
+                            st.success("Caso marcado como útil e validado com alta prioridade.")
                             st.rerun()
                     with col_fb2:
                         if st.button("Precisa melhorar", key=f"btn_nao_{caso['id']}"):
@@ -482,8 +704,8 @@ with aba2:
                             st.warning("Feedback registrado.")
                             st.rerun()
                     with col_fb3:
-                        status_atual_txt = "Aprovado pela equipe" if caso['feedback'] == 1 else ("Requer atenção" if caso['feedback'] == -1 else "Ainda não avaliado")
-                        st.markdown(f"<span style='font-size: 12px; color: #475569; line-height: 2.2;'>Curadoria: <b>{status_atual_txt}</b></span>", unsafe_allow_html=True)
+                        status_txt = "Validado e Confiável" if caso.get('validado', 0) == 1 else "Aguardando Curadoria"
+                        st.markdown(f"<span style='font-size: 12px; color: #475569; line-height: 2.2;'>Curadoria: <b>{status_txt}</b></span>", unsafe_allow_html=True)
 
 # ------------------------------------------
 # ABA 3: BASE DE CONHECIMENTO E REFERÊNCIAS
