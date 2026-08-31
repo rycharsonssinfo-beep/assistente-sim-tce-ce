@@ -798,52 +798,51 @@ with aba4:
                 "historico_contrato": "09.27.04.26.001",
                 "cpf_arquivo": "95991360391",
                 "cpf_historico": "AcmPN41eFzWYQ0IVLyjz/g==",
-                "status_cpf": "divergente",
-                "assinatura_arquivo": "27/04/2026",
-                "assinatura_historico": "27/04/2026",
                 "status_geral": "Contrato localizado"
             }
         ]
 
         for item in itens_analisados:
-            html_card = f"""
-                <div style='background: white; border: 1px solid #CBD5E1; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); font-family: sans-serif;'>
-                    <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;'>
-                        <span style='font-weight: 600; color: #0F172A; font-size: 15px;'>{item['linha']}</span>
-                        <span style='background-color: #DCFCE7; color: #166534; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;'>{item['status_geral']}</span>
+            with st.container():
+                st.markdown(f"""
+                    <div style='background: white; border: 1px solid #CBD5E1; border-radius: 8px; padding: 16px 20px; margin-bottom: 12px;'>
+                        <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;'>
+                            <span style='font-weight: 600; color: #0F172A; font-size: 15px;'>{item['linha']}</span>
+                            <span style='background-color: #DCFCE7; color: #166534; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;'>{item['status_geral']}</span>
+                        </div>
                     </div>
-                    
-                    <div style='display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;'>
-                        <!-- Bloco Contrato -->
+                """, unsafe_allow_html=True)
+                
+                col_b1, col_b2, col_b3 = st.columns(3)
+                
+                with col_b1:
+                    st.markdown(f"""
                         <div style='background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px;'>
                             <div style='font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 6px;'>Contrato</div>
-                            <div style='display: flex; justify-content: space-between; font-size: 13px;'>
-                                <span style='color: #64748B;'>Arquivo: <b style='color: #0F172A;'>{item['contrato']}</b></span>
-                                <span style='color: #64748B;'>Histórico: <b style='color: #0F172A;'>{item['historico_contrato']}</b></span>
-                            </div>
+                            <div style='font-size: 13px; color: #64748B;'>Arquivo: <b style='color: #0F172A;'>{item['contrato']}</b></div>
+                            <div style='font-size: 13px; color: #64748B;'>Histórico: <b style='color: #0F172A;'>{item['historico_contrato']}</b></div>
                         </div>
-
-                        <!-- Bloco CPF Gestor (Divergente) -->
+                    """, unsafe_allow_html=True)
+                    
+                with col_b2:
+                    st.markdown(f"""
                         <div style='background: #FEF2F2; border: 1px solid #FECACA; border-radius: 6px; padding: 12px;'>
                             <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase; margin-bottom: 6px;'>CPF Gestor</div>
-                            <div style='display: flex; justify-content: space-between; font-size: 13px;'>
-                                <span style='color: #64748B;'>Arquivo: <b style='color: #991B1B;'>{item['cpf_arquivo']}</b></span>
-                                <span style='color: #64748B;'>Histórico: <b style='color: #0F172A;'>{item['cpf_historico']}</b></span>
-                            </div>
+                            <div style='font-size: 13px; color: #64748B;'>Arquivo: <b style='color: #991B1B;'>{item['cpf_arquivo']}</b></div>
+                            <div style='font-size: 13px; color: #64748B;'>Histórico: <b style='color: #0F172A;'>{item['cpf_historico']}</b></div>
                         </div>
-
-                        <!-- Bloco Assinatura -->
+                    """, unsafe_allow_html=True)
+                    
+                with col_b3:
+                    st.markdown(f"""
                         <div style='background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px;'>
                             <div style='font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 6px;'>Assinatura</div>
-                            <div style='display: flex; justify-content: space-between; font-size: 13px;'>
-                                <span style='color: #64748B;'>Arquivo: <b style='color: #0F172A;'>{item['assinatura_arquivo']}</b></span>
-                                <span style='color: #64748B;'>Histórico: <b style='color: #0F172A;'>{item['assinatura_historico']}</b></span>
-                            </div>
+                            <div style='font-size: 13px; color: #64748B;'>Arquivo: <b style='color: #0F172A;'>27/04/2026</b></div>
+                            <div style='font-size: 13px; color: #64748B;'>Histórico: <b style='color: #0F172A;'>27/04/2026</b></div>
                         </div>
-                    </div>
-                </div>
-            """
-            st.markdown(html_card, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
+                
+                st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
         st.markdown("")
         if st.button("Nova Análise", use_container_width=True):
