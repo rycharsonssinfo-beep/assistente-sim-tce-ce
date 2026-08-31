@@ -731,7 +731,7 @@ with aba3:
 with aba4:
     st.markdown("")
     st.markdown("##### Módulo de Conciliação e Auditoria Cruzada")
-    st.markdown("<span style='font-size: 13px; color: #475569;'>Envie os arquivos oficiais do SIM/TCE-CE (como .DCD, .LCO, .BAS, .OSE, .CRD, entre outros) para validação e cruzamento.</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size: 13px; color: #475569;'>Análise detalhada de divergências entre os arquivos enviados e os registros oficiais do sistema.</span>", unsafe_allow_html=True)
     st.markdown("---")
 
     col_up1, col_up2 = st.columns(2)
@@ -740,7 +740,7 @@ with aba4:
     with col_up2:
         arquivo_co = st.file_uploader("Clique ou arraste o arquivo CO (.LCO)", type=["lco", "txt", "dat", "ose", "crd"])
 
-    exibir_apenas_erros = st.checkbox("Exibir somente as linhas com erros ou divergências no servidor")
+    exibir_apenas_erros = st.checkbox("Exibir somente as linhas com erros ou divergências")
 
     st.markdown("---")
 
@@ -748,22 +748,65 @@ with aba4:
         if not arquivo_ne and not arquivo_co:
             st.warning("Por favor, envie ao menos um arquivo oficial do SIM para iniciar a análise.")
         else:
-            st.success("Arquivos recebidos com sucesso! Processando cruzamento de dados...")
+            st.success("Arquivos recebidos com sucesso! Processando cruzamento detalhado...")
             
-            st.markdown("##### Resultado da Análise Cruzada")
-            
-            dados_simulados = [
-                {"id": "01", "registro": "NE202607.DCD", "status": "CONCILIADO", "detalhe": "Nenhuma divergência encontrada entre os registros de dívida."},
-                {"id": "02", "registro": "LCO202607.LCO", "status": "DIVERGENTE", "detalhe": "Divergência nos campos de vínculo orçamentário ou ordenador de despesa."},
+            st.markdown("##### Resultado da Análise")
+            st.caption("Mostrando comparação detalhada por campos do registro.")
+            st.markdown("")
+
+            itens_analisados = [
+                {
+                    "linha": "Linha 1",
+                    "contrato": "09.27.04.26.001",
+                    "historico_contrato": "09.27.04.26.001",
+                    "cpf_arquivo": "95991360391",
+                    "cpf_historico": "AcmPN41eFzWYQ0IVLyjz/g==",
+                    "status_cpf": "divergente",
+                    "assinatura_arquivo": "27/04/2026",
+                    "assinatura_historico": "27/04/2026",
+                    "status_geral": "Contrato localizado"
+                }
             ]
 
-            for item in dados_simulados:
-                if exibir_apenas_erros and item["status"] == "CONCILIADO":
+            for item in itens_analisados:
+                if exibir_apenas_erros and item["status_cpf"] != "divergente":
                     continue
-                
-                cor = "green" if item["status"] == "CONCILIADO" else "red"
+
                 with st.container():
-                    col_res1, col_res2 = st.columns([3, 1])
-                    col_res1.markdown(f"**Registro:** `{item['registro']}`<br><span style='font-size: 13px; color: #64748B;'>{item['detalhe']}</span>", unsafe_allow_html=True)
-                    col_res2.markdown(f":{cor}[**{item['status']}**]")
-                    st.markdown("---")
+                    st.markdown(f"""
+                        <div style='background: white; border: 1px solid #CBD5E1; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);'>
+                            <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;'>
+                                <span style='font-weight: 600; color: #0F172A; font-size: 15px;'>{item['linha']}</span>
+                                <span style='background-color: #DCFCE7; color: #166534; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;'>{item['status_geral']}</span>
+                            </div>
+                            
+                            <div style='display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;'>
+                                <!-- Bloco Contrato -->
+                                <div style='background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px;'>
+                                    <div style='font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 6px;'>Contrato</div>
+                                    <div style='display: flex; justify-content: space-between; font-size: 13px;'>
+                                        <span style='color: #64748B;'>Arquivo: <b style='color: #0F172A;'>{item['contrato']}</b></span>
+                                        <span style='color: #64748B;'>Histórico: <b style='color: #0F172A;'>{item['historico_contrato']}</b></span>
+                                    </div>
+                                </div>
+
+                                <!-- Bloco CPF Gestor (Divergente) -->
+                                <div style='background: #FEF2F2; border: 1px solid #FECACA; border-radius: 6px; padding: 12px;'>
+                                    <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase; margin-bottom: 6px;'>CPF Gestor</div>
+                                    <div style='display: flex; justify-content: space-between; font-size: 13px;'>
+                                        <span style='color: #64748B;'>Arquivo: <b style='color: #991B1B;'>{item['cpf_arquivo']}</b></span>
+                                        <span style='color: #64748B;'>Histórico: <b style='color: #0F172A;'>{item['cpf_historico']}</b></span>
+                                    </div>
+                                </div>
+
+                                <!-- Bloco Assinatura -->
+                                <div style='background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px;'>
+                                    <div style='font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 6px;'>Assinatura</div>
+                                    <div style='display: flex; justify-content: space-between; font-size: 13px;'>
+                                        <span style='color: #64748B;'>Arquivo: <b style='color: #0F172A;'>{item['assinatura_arquivo']}</b></span>
+                                        <span style='color: #64748B;'>Histórico: <b style='color: #0F172A;'>{item['assinatura_historico']}</b></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
