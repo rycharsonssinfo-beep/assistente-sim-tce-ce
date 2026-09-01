@@ -328,7 +328,7 @@ with st.sidebar:
 # ==========================================
 # 7. TELA PRINCIPAL E ABAS
 # ==========================================
-st.title("Audit & Diagnóstico SIM TCE-CE")
+st.title("Diagnóstico SIM TCE-CE")
 st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada para auditoria cruzada e análise de integridade referencial.</span>", unsafe_allow_html=True)
 
 aba1, aba2, aba3, aba4, aba5 = st.tabs([
@@ -384,7 +384,7 @@ with aba1:
             st.session_state["historico_casos"] = carregar_historico_db()
 
 # ------------------------------------------
-# ABA 2: AUDITORIA CRUZADA (MAPEAMENTO DINÂMICO DE UNIDADE ORÇAMENTÁRIA / DESTINAÇÕES)
+# ABA 2: AUDITORIA CRUZADA
 # ------------------------------------------
 with aba2:
     if "etapa_auditoria" not in st.session_state:
@@ -450,7 +450,6 @@ with aba2:
         st.caption(f"Resultados detalhados para o cruzamento em: **{modulo_atual}**")
         st.markdown("")
 
-        # Dicionário de tradução amigável para os campos técnicos da chave de VEICULOS_DESTINACOES
         dicionario_campos = {
             "cd_municipio": ("Código do Município", "Incompatível com o cadastro oficial do IBGE"),
             "dt_versao_orc": ("Data da Versão do Orçamento", "Versão da LOA divergente da remessa oficial"),
@@ -468,11 +467,9 @@ with aba2:
 
         st.info(f"💡 Foram identificadas **{len(lista_linhas)} linhas** afetadas com inconsistência nas chaves de relacionamento de VEICULOS_DESTINACOES.")
 
-        # Exibe os registros mapeados dinamicamente focando no campo de unidade orçamentária e chaves relacionadas
         for idx, l_num in enumerate(lista_linhas[:15] if len(lista_linhas) > 15 else lista_linhas):
             num_formatado = f"Linha {l_num}" if not l_num.lower().startswith("linha") else l_num
             
-            # Distribuindo os campos dinamicamente conforme o erro real reportado do VEICULOS_DESTINACOES
             if idx % 3 == 0:
                 campo_tecnico = "cd_unid_orc"
             elif idx % 3 == 1:
