@@ -186,16 +186,6 @@ def salvar_caso_db(erro, resposta, confianca="Média", validado=0, modulo="Não 
     finally:
         conn.close()
 
-def atualizar_feedback_db(caso_id, novo_valor):
-    inicializar_banco()
-    conn = sqlite3.connect(NOME_BANCO)
-    cursor = conn.cursor()
-    validado_val = 1 if novo_valor == 1 else 0
-    conf_val = "Alta" if novo_valor == 1 else "Média"
-    cursor.execute("UPDATE casos SET feedback = ?, validado = ?, confianca = ? WHERE id = ?", (novo_valor, validado_val, conf_val, caso_id))
-    conn.commit()
-    conn.close()
-
 def exportar_base_json():
     historico = carregar_historico_db()
     dados_limpos = [{
@@ -591,7 +581,7 @@ with aba1:
                 st.info(resposta_obtida)
 
 # ------------------------------------------
-# ABA 2: AUDITORIA E CONCILIAÇÃO CRUZADA (ETAPAS REDESENHADAS)
+# ABA 2: AUDITORIA E CONCILIAÇÃO CRUZADA (MULTIPLOS ARQUIVOS)
 # ------------------------------------------
 with aba2:
     if "etapa_auditoria" not in st.session_state:
@@ -603,39 +593,51 @@ with aba2:
     st.markdown(f"""
         <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
             <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>
-                Passo 1: Definir Alvos
+                Passo 1: Selecionar Módulo / Alvos
             </div>
             <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==2 else "#F1F5F9"}; color: {"white" if passo==2 else "#64748B"}; font-weight: 600; font-size: 13px;'>
-                Passo 2: Enviar Fontes
+                Passo 2: Enviar Arquivos (Qualquer Extensão)
             </div>
             <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px;'>
-                Passo 3: Relatório Final
+                Passo 3: Relatório de Cruzamento
             </div>
         </div>
     """, unsafe_allow_html=True)
 
     # ETAPA 1
     if passo == 1:
-        st.markdown("##### 1. Informe as Linhas com Divergência")
-        st.caption("Especifique os números das linhas sinalizadas pelo relatório do TCE para direcionar a varredura.")
+        st.markdown("##### 1. Escolha o Módulo e Linhas de Divergência")
+        st.caption("Selecione o tipo de auditoria cruzada que deseja realizar e especifique as linhas.")
         
-        linhas_input = st.text_area("Seleção de Linhas", placeholder="Exemplo: 10, 15, 22-30", height=100)
+        tipo_auditoria = st.selectbox(
+            "Selecione o Módulo / Tipo de Cruzamento",
+            [
+                "Contratos e Aditivos (.LCO / .DCD / .CTR)",
+                "Veículos e Frotas (.VCL / .BAS)",
+                "Patrimônio e Bens (.PAT / .BAS)",
+                "Recursos Humanos / Pessoal (.CPF / .BAS)",
+                "Outro / Genérico (Múltiplos Arquivos)"
+            ]
+        )
+        
+        linhas_input = st.text_area("Linhas com Divergência (Opcional)", placeholder="Exemplo: 10, 15, 22-30", height=80)
         
         if st.button("Avançar para Carga de Arquivos →", type="primary"):
+            st.session_state["tipo_auditoria_selecionada"] = tipo_auditoria
             st.session_state["linhas_com_erro"] = linhas_input
             st.session_state["etapa_auditoria"] = 2
             st.rerun()
 
-    # ETAPA 2
+    # ETAPA 2 - SUPORTE A MÚLTIPLOS ARQUIVOS
     elif passo == 2:
-        st.markdown("##### 2. Upload de Arquivos de Origem e Destino")
-        st.caption("Carregue as remessas para execução da auditoria cruzada.")
+        st.markdown(f"##### 2. Upload de Arquivos para: {st.session_state.get('tipo_auditoria_selecionada', 'Geral')}")
+        st.caption("Você pode carregar arquivos de diferentes extensões exigidas pelo TCE (.dcd, .lco, .vcl, .pat, .cpf, .txt, .dat).")
         
         col1, col2 = st.columns(2)
         with col1:
-            st.file_uploader("Arquivo A (.DCD / Remessa)", type=["dcd", "txt", "dat"])
+            st.file_uploader("Arquivo Principal / Movimentação (Ex: .DCD, .VCL, .PAT, .CPF)", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat"])
         with col2:
-            st.file_uploader("Arquivo B (.LCO / Referência)", type=["lco", "txt", "dat"])
+            st.file_uploader("Arquivo de Referência / Cadastro Base (Ex: .LCO, .BAS)", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat"])
 
         col_b1, col_b2 = st.columns([1, 4])
         with col_b1:
@@ -643,69 +645,61 @@ with aba2:
                 st.session_state["etapa_auditoria"] = 1
                 st.rerun()
         with col_b2:
-            if st.button("Executar Conciliação", type="primary"):
+            if st.button("Executar Conciliação Avançada", type="primary"):
                 st.session_state["etapa_auditoria"] = 3
                 st.rerun()
 
     # ETAPA 3: DESIGN EXCLUSIVO DE CARDS
     elif passo == 3:
-        st.markdown("##### 3. Conciliação por Campo do Registro")
-        st.caption("Abaixo estão destacados os campos auditados e a indicação de conformidade.")
+        st.markdown("##### 3. Relatório de Conciliação Cruzada")
+        st.caption(f"Resultados para o cruzamento em: **{st.session_state.get('tipo_auditoria_selecionada', 'Geral')}**")
         st.markdown("")
 
-        # Registro de Exemplo com Layout em Cards Limpos
+        # Registro de Exemplo Dinâmico
         itens_analisados = [
             {
                 "linha": "Linha 1",
-                "contrato": "09.27.04.26.001",
-                "historico_contrato": "09.27.04.26.001",
-                "cpf_arquivo": "95991360391",
-                "cpf_historico": "AcmPN41eFzWYQ0IVLyjz/g==",
-                "status_geral": "Contrato Localizado com Divergência de CPF"
+                "id_registro": "ID-884029",
+                "comparacao_1": "09.27.04.26.001",
+                "historico_1": "09.27.04.26.001",
+                "label_1": "Vínculo Orçamentário",
+                "comparacao_2": "95991360391",
+                "historico_2": "Incompatível / Não Encontrado",
+                "label_2": "Chave / CPF / Parâmetro",
+                "status_geral": "Divergência Encontrada no Cruzamento"
             }
         ]
 
         for item in itens_analisados:
-            # Header do Card Principal
             st.markdown(f"""
                 <div style='background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px 10px 0 0; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;'>
-                    <span style='font-size: 16px; font-weight: 700; color: #0F172A;'>{item['linha']}</span>
+                    <span style='font-size: 16px; font-weight: 700; color: #0F172A;'>{item['linha']} ({item['id_registro']})</span>
                     <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>{item['status_geral']}</span>
                 </div>
             """, unsafe_allow_html=True)
             
-            # Container de Conteúdo Usando Colunas do Streamlit
             with st.container():
-                col_c1, col_c2, col_c3 = st.columns(3)
+                col_c1, col_c2 = st.columns(2)
                 
                 with col_c1:
-                    st.markdown("""
+                    st.markdown(f"""
                         <div style='background: #F8FAFC; border-left: 4px solid #10B981; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>NÚMERO DO CONTRATO</div>
-                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Remessa: <b>09.27.04.26.001</b></div>
-                            <div style='font-size: 13px; color: #334155;'>Base SIM: <b>09.27.04.26.001</b></div>
+                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>{item['label_1']}</div>
+                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Remessa: <b>{item['comparacao_1']}</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Base Referência: <b>{item['historico_1']}</b></div>
                         </div>
                     """, unsafe_allow_html=True)
 
                 with col_c2:
-                    st.markdown("""
+                    st.markdown(f"""
                         <div style='background: #FEF2F2; border-left: 4px solid #E11D48; border-top: 1px solid #FECACA; border-right: 1px solid #FECACA; border-bottom: 1px solid #FECACA; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>CPF DO GESTOR</div>
-                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Remessa: <b>95991360391</b></div>
-                            <div style='font-size: 13px; color: #334155;'>Base SIM: <b>AcmPN41eFzWYQ0IVLyjz/g==</b></div>
+                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>{item['label_2']}</div>
+                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Remessa: <b>{item['comparacao_2']}</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Base Referência: <b>{item['historico_2']}</b></div>
                         </div>
                     """, unsafe_allow_html=True)
 
-                with col_c3:
-                    st.markdown("""
-                        <div style='background: #F8FAFC; border-left: 4px solid #10B981; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>DATA ASSINATURA</div>
-                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Remessa: <b>27/04/2026</b></div>
-                            <div style='font-size: 13px; color: #334155;'>Base SIM: <b>27/04/2026</b></div>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-        if st.button("Nova Consulta"):
+        if st.button("Nova Consulta / Outro Módulo"):
             st.session_state["etapa_auditoria"] = 1
             st.rerun()
 
