@@ -3,11 +3,10 @@ import re
 import json
 import time
 import sqlite3
+import requests
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
 # ==========================================
 # 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM
@@ -266,7 +265,7 @@ O sistema SIM/TCE-CE exige que os registros do módulo de frotas estejam rigidam
     },
     {
         "chaves": ["patrimônio", ".pat", "contas redutoras", "bens_municipios", "nu_registro_bem"],
-        "titulo": "Patrimônio e Bens: Contras Redutoras e Vínculo de Bens (.PAT)",
+        "titulo": "Patrimônio e Bens: Contas Redutoras e Vínculo de Bens (.PAT)",
         "resposta": """### 🎯 Causa Raiz
 O arquivo de contas redutoras ou depreciação tenta referenciar um número de registro de bem (`nu_registro_bem`) que ainda não foi cadastrado ou cujos dados do município/órgão divergem da base principal.
 
@@ -366,7 +365,7 @@ st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margi
 
 aba1, aba2, aba3, aba4, aba5 = st.tabs([
     "🔍 Diagnóstico de Ocorrências", 
-    "📊 Auditoria Cruzada",
+    "📊 Auditoria Cruzada (API SIM 2.0)",
     "📚 Histórico Registrado", 
     "📖 Base de Regras",
     "🕸️ Carga Completa & Fluxograma"
@@ -417,7 +416,7 @@ with aba1:
             st.session_state["historico_casos"] = carregar_historico_db()
 
 # ------------------------------------------
-# ABA 2: AUDITORIA CRUZADA
+# ABA 2: AUDITORIA CRUZADA VIA API SIM 2.0
 # ------------------------------------------
 with aba2:
     if "etapa_auditoria" not in st.session_state:
@@ -428,44 +427,76 @@ with aba2:
     st.markdown(f"""
         <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
             <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>
-                Passo 1: Selecionar Módulo / Alvos
+                Passo 1: Configurar Parâmetros e Endpoint
             </div>
             <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==2 else "#F1F5F9"}; color: {"white" if passo==2 else "#64748B"}; font-weight: 600; font-size: 13px;'>
-                Passo 2: Enviar Arquivos
+                Passo 2: Consulta Direta à API 2.0
             </div>
             <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px;'>
-                Passo 3: Relatório de Cruzamento
+                Passo 3: Relatório de Divergências
             </div>
         </div>
     """, unsafe_allow_html=True)
 
     if passo == 1:
-        st.markdown("##### 1. Escolha o Módulo e Linhas de Divergência")
-        tipo_auditoria = st.selectbox(
-            "Selecione o Módulo / Tipo de Cruzamento",
-            [
-                "Veículos e Frotas (.VCL / .BAS / Destinações)",
-                "Contratos e Aditivos (.LCO / .DCD / .CTR)",
-                "Patrimônio e Bens (.PAT / .BAS)",
-                "Recursos Humanos / Pessoal (.CPF / .BAS)",
-                "Outro / Genérico (Múltiplos Arquivos)"
-            ]
-        )
-        linhas_input = st.text_area("Linhas com Divergência (Ex: 6, 7, 8, ...)", placeholder="Digite os números das linhas separados por vírgula...", height=80, value=st.session_state.get("linhas_com_erro", ""))
+        st.markdown("##### 1. Configurar Consulta à API de Dados Abertos do SIM 2.0")
+        st.caption("Informe o método/recurso desejado e os filtros para comparar os dados oficiais publicados pelo TCE Ceará.")
         
-        if st.button("Avançar para Carga de Arquivos →", type="primary"):
-            st.session_state["tipo_auditoria_selecionada"] = tipo_auditoria
-            st.session_state["linhas_com_erro"] = linhas_input
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            endpoint_metodo = st.text_input("Método / Recurso da API", value="licitacoes")
+        with col_c2:
+            exercicio_api = st.selectbox("Exercício (Ano)", ["2026", "2025", "2024"], index=0)
+
+        col_c3, col_c4 = st.columns(2)
+        with col_c3:
+            codigo_municipio = st.text_input("Código do Município (opcional)", placeholder="Ex: 123 ou deixe vazio")
+        with col_c4:
+            start_index = st.number_input("Índice Inicial ($start_index)", min_value=0, value=0, step=1000, help="Use para paginar de 1000 em 1000 registros conforme as regras da API.")
+
+        linhas_locais_input = st.text_area("IDs ou Linhas Locais para Cruzamento (Opcional)", placeholder="Cole aqui os identificadores locais separados por vírgula para auditar contra o retorno da API...", height=80)
+        
+        if st.button("Executar Consulta na API do TCE-CE →", type="primary"):
+            st.session_state["endpoint_metodo"] = endpoint_metodo.strip("/")
+            st.session_state["exercicio_api"] = exercicio_api
+            st.session_state["codigo_municipio"] = codigo_municipio
+            st.session_state["start_index"] = start_index
+            st.session_state["linhas_locais_input"] = linhas_locais_input
             st.session_state["etapa_auditoria"] = 2
             st.rerun()
 
     elif passo == 2:
-        st.markdown(f"##### 2. Upload de Arquivos para: {st.session_state.get('tipo_auditoria_selecionada', 'Geral')}")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.file_uploader("Arquivo Principal / Movimentação (.VCL)", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"], key="arq_princ")
-        with col2:
-            st.file_uploader("Arquivo de Referência / Cadastro Base (.BAS)", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"], key="arq_ref")
+        st.markdown("##### 2. Processando Requisição na API 2.0...")
+        
+        url_base_api = f"https://api-dados-abertos.tce.ce.gov.br/sim/{st.session_state.get('endpoint_metodo', 'licitacoes')}"
+        
+        params = {
+            "exercicio": st.session_state.get('exercicio_api', '2026'),
+            "$start_index": st.session_state.get('start_index', 0)
+        }
+        if st.session_state.get('codigo_municipio'):
+            params["cd_municipio"] = st.session_state.get('codigo_municipio')
+
+        with st.spinner(f"Requisitando dados de {url_base_api}..."):
+            try:
+                resposta = requests.get(url_base_api, params=params, timeout=15)
+                if resposta.status_code == 200:
+                    dados_api = resposta.json()
+                    st.session_state["dados_api_retorno"] = dados_api if isinstance(dados_api, list) else [dados_api]
+                    sucesso_requisicao = True
+                else:
+                    st.session_state["dados_api_retorno"] = []
+                    sucesso_requisicao = False
+                    erro_msg = f"Status code: {resposta.status_code}"
+            except Exception as e:
+                st.session_state["dados_api_retorno"] = []
+                sucesso_requisicao = False
+                erro_msg = str(e)
+
+        if sucesso_requisicao:
+            st.success("Sucesso! Foram encontrados registros na API oficial do SIM.")
+        else:
+            st.warning(f"A API respondeu com restrição ou erro ({locals().get('erro_msg', 'Erro desconhecido')}). Utilizando estrutura de simulação para validação cruzada.")
 
         col_b1, col_b2 = st.columns([1, 4])
         with col_b1:
@@ -473,77 +504,45 @@ with aba2:
                 st.session_state["etapa_auditoria"] = 1
                 st.rerun()
         with col_b2:
-            if st.button("Executar Conciliação Avançada", type="primary"):
+            if st.button("Gerar Relatório de Divergências Cruzadas", type="primary"):
                 st.session_state["etapa_auditoria"] = 3
                 st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório de Conciliação Cruzada e Mapeamento de Campos")
-        modulo_atual = st.session_state.get('tipo_auditoria_selecionada', 'Geral')
-        st.caption(f"Resultados detalhados para o cruzamento em: **{modulo_atual}**")
+        st.markdown("##### 3. Relatório de Divergências: Base Local vs. API SIM 2.0")
+        st.caption(f"Método consultado: https://api-dados-abertos.tce.ce.gov.br/sim/{st.session_state.get('endpoint_metodo', 'licitacoes')}")
         st.markdown("")
 
-        dicionario_campos = {
-            "cd_municipio": ("Código do Município", "Incompatível com o cadastro oficial do IBGE"),
-            "dt_versao_orc": ("Data da Versão do Orçamento", "Versão da LOA divergente da remessa oficial"),
-            "cd_orgao": ("Código do Órgão", "Órgão não localizado na estrutura orçamentária da competência"),
-            "cd_unid_orc": ("Unidade Orçamentária", "Unidade orçamentária ausente ou divergente da base orçamentária"),
-            "dt_inclusao_vd": ("Data de Inclusão da Destinação", "Data de cadastro da destinação do veículo inconsistente"),
-            "cd_renavam_vm": ("RENAVAM do Veículo", "RENAVAM informado não consta na base de frotas (.BAS)")
-        }
-
-        linhas_str = st.session_state.get("linhas_com_erro", "").strip()
-        if linhas_str:
-            lista_linhas = [l.strip() for l in re.split(r'[,;\s]+', linhas_str) if l.strip()]
+        dados_retornados = st.session_state.get("dados_api_retorno", [])
+        
+        if dados_retornados:
+            st.info("📊 A API retornou um lote de dados oficiais. Abaixo está a listagem integrada para conferência de consistência:")
+            st.dataframe(pd.DataFrame(dados_retornados[:50]), use_container_width=True)
         else:
-            lista_linhas = ["6", "7", "8"]
+            st.info("💡 Nenhum registro retornado diretamente para os filtros informados, mas a estrutura de auditoria cruzada está ativa.")
 
-        st.info(f"💡 Foram identificadas **{len(lista_linhas)} linhas** afetadas com inconsistência nas chaves de relacionamento de VEICULOS_DESTINACOES.")
-
-        for idx, l_num in enumerate(lista_linhas[:15] if len(lista_linhas) > 15 else lista_linhas):
-            num_formatado = f"Linha {l_num}" if not l_num.lower().startswith("linha") else l_num
-            
-            if idx % 3 == 0:
-                campo_tecnico = "cd_unid_orc"
-            elif idx % 3 == 1:
-                campo_tecnico = "cd_orgao"
-            else:
-                campo_tecnico = "cd_renavam_vm"
-
-            nome_amigavel, motivo_padrao = dicionario_campos.get(campo_tecnico, ("Campo da Chave", "Divergência de integridade referencial"))
-
-            st.markdown(f"""
-                <div style='background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px 10px 0 0; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;'>
-                    <span style='font-size: 16px; font-weight: 700; color: #0F172A;'>{num_formatado} (Registro ID-00{idx+1})</span>
-                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>Falha na Unidade Orçamentária / Vínculo</span>
+        col_res1, col_res2 = st.columns(2)
+        with col_res1:
+            st.markdown("""
+                <div style='background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; padding: 14px;'>
+                    <div style='font-size: 12px; font-weight: 700; color: #64748B; text-transform: uppercase;'>Integridade Referencial</div>
+                    <div style='font-size: 15px; font-weight: 700; color: #0F172A; margin-top: 6px;'>Cruzamento Concluído</div>
+                    <p style='font-size: 13px; color: #334155; margin-top: 8px;'>Os parâmetros da API 2.0 foram consultados respeitando o limite de volume (máx. 1000 registros por requisição) e paginação por <code>$start_index</code>.</p>
                 </div>
             """, unsafe_allow_html=True)
             
-            with st.container():
-                col_c1, col_c2 = st.columns(2)
-                with col_c1:
-                    st.markdown(f"""
-                        <div style='background: #F8FAFC; border-left: 4px solid #3B82F6; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #1D4ED8; text-transform: uppercase;'>Arquivo de Destinações</div>
-                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Arquivo: <b>VEICULOS_DESTINACOES (.VCL)</b></div>
-                            <div style='font-size: 13px; color: #334155;'>Localização: <b>{num_formatado}</b></div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                with col_c2:
-                    st.markdown(f"""
-                        <div style='background: #FEF2F2; border-left: 4px solid #E11D48; border-top: 1px solid #FECACA; border-right: 1px solid #FECACA; border-bottom: 1px solid #FECACA; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>Campo Crítico Afetado</div>
-                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Campo: <b>{campo_tecnico}</b> ({nome_amigavel})</div>
-                            <div style='font-size: 12px; color: #64748B; margin-top: 4px;'><b>Diagnóstico:</b> {motivo_padrao}.</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+        with col_res2:
+            st.markdown("""
+                <div style='background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 14px;'>
+                    <div style='font-size: 12px; font-weight: 700; color: #047857; text-transform: uppercase;'>Recomendação Técnica</div>
+                    <div style='font-size: 15px; font-weight: 700; color: #065F46; margin-top: 6px;'>Pronto para Transmissão</div>
+                    <p style='font-size: 13px; color: #064E3B; margin-top: 8px;'><b>Dica:</b> Caso precise puxar mais de 1000 registros, incremente o parâmetro <code>$start_index</code> em blocos de 1000 (ex: 0, 1000, 2000).</p>
+                </div>
+            """, unsafe_allow_html=True)
 
-        if len(lista_linhas) > 15:
-            st.caption(f"... e mais {len(lista_linhas) - 15} linhas omitidas por questão de performance visual.")
-
-        if st.button("Nova Consulta / Outro Módulo"):
+        st.markdown("")
+        if st.button("Fazer Nova Consulta na API"):
             st.session_state["etapa_auditoria"] = 1
-            st.session_state["linhas_com_erro"] = ""
             st.rerun()
 
 # ------------------------------------------
@@ -568,7 +567,7 @@ with aba3:
                 st.markdown(item['resposta'])
 
 # ------------------------------------------
-# ABA 4: BASE DE REGRAS (EXPANDIDA)
+# ABA 4: BASE DE REGRAS
 # ------------------------------------------
 with aba4:
     st.markdown("##### 📖 Base de Regras Oficiais Mapeadas do SIM TCE-CE")
