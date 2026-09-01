@@ -384,7 +384,7 @@ with aba1:
             st.session_state["historico_casos"] = carregar_historico_db()
 
 # ------------------------------------------
-# ABA 2: AUDITORIA CRUZADA (COM CAMPOS ESPECÍFICOS POR MÓDULO)
+# ABA 2: AUDITORIA CRUZADA (COM CAMPOS ESPECÍFICOS DE LIQUIDAÇÃO)
 # ------------------------------------------
 with aba2:
     if "etapa_auditoria" not in st.session_state:
@@ -411,8 +411,8 @@ with aba2:
         tipo_auditoria = st.selectbox(
             "Selecione o Módulo / Tipo de Cruzamento",
             [
+                "Veículos e Frotas (.VCL / .BAS / Liquidações)",
                 "Contratos e Aditivos (.LCO / .DCD / .CTR)",
-                "Veículos e Frotas (.VCL / .BAS)",
                 "Patrimônio e Bens (.PAT / .BAS)",
                 "Recursos Humanos / Pessoal (.CPF / .BAS)",
                 "Outro / Genérico (Múltiplos Arquivos)"
@@ -430,9 +430,9 @@ with aba2:
         st.markdown(f"##### 2. Upload de Arquivos para: {st.session_state.get('tipo_auditoria_selecionada', 'Geral')}")
         col1, col2 = st.columns(2)
         with col1:
-            st.file_uploader("Arquivo Principal / Movimentação", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"], key="arq_princ")
+            st.file_uploader("Arquivo Principal / Movimentação (.VCL)", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"], key="arq_princ")
         with col2:
-            st.file_uploader("Arquivo de Referência / Cadastro Base", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"], key="arq_ref")
+            st.file_uploader("Arquivo de Referência / LIQUIDAÇÕES", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"], key="arq_ref")
 
         col_b1, col_b2 = st.columns([1, 4])
         with col_b1:
@@ -450,22 +450,13 @@ with aba2:
         st.caption(f"Resultados detalhados para o cruzamento em: **{modulo_atual}**")
         st.markdown("")
 
-        # Define os rótulos dinâmicos com base no módulo escolhido
-        if "Veículos" in modulo_atual:
-            coluna_analisada = "Placa / Chassi do Veículo"
-            detalhe_erro = "Veículo informado na movimentação não consta na base de cadastro de frotas (.BAS) da competência."
-        elif "Contratos" in modulo_atual:
-            coluna_analisada = "Número do Contrato / CPF Ordenador"
-            detalhe_erro = "Contrato ou CPF do ordenador de despesa divergente/ausente no arquivo de licitações ou gestores."
-        elif "Patrimônio" in modulo_atual:
-            coluna_analisada = "Número de Tombamento (Bens)"
-            detalhe_erro = "Bem patrimonial informado sem correspondência prévia no cadastro geral de bens."
-        elif "Pessoal" in modulo_atual:
-            coluna_analisada = "CPF do Servidor / Matrícula"
-            detalhe_erro = "Servidor não localizado na base de agentes públicos ou lotação informada inválida."
-        else:
-            coluna_analisada = "Chave de Identificação do Registro"
-            detalhe_erro = "Inconsistência referencial detectada entre o arquivo principal e a base de referência."
+        coluna_analisada = "Chave de Vínculo com LIQUIDAÇÕES"
+        detalhe_erro = (
+            "Não há relação com o(s) campo(s) "
+            "(cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc, "
+            "dt_emissao_ne, nu_nota_empenho, dt_liquid_liq) "
+            "que compõe(m) a chave do arquivo LIQUIDAÇÕES."
+        )
 
         linhas_str = st.session_state.get("linhas_com_erro", "").strip()
         if linhas_str:
@@ -478,7 +469,7 @@ with aba2:
             st.markdown(f"""
                 <div style='background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px 10px 0 0; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;'>
                     <span style='font-size: 16px; font-weight: 700; color: #0F172A;'>{num_formatado} (Registro ID-00{idx+1})</span>
-                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>Divergência de Integridade</span>
+                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>Divergência de Chave / Liquidação</span>
                 </div>
             """, unsafe_allow_html=True)
             
@@ -487,17 +478,17 @@ with aba2:
                 with col_c1:
                     st.markdown(f"""
                         <div style='background: #F8FAFC; border-left: 4px solid #10B981; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>Vínculo Orçamentário / Unidade</div>
-                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Remessa: <b>09.27.04.26.001</b></div>
-                            <div style='font-size: 13px; color: #334155;'>Base Referência: <b>09.27.04.26.001 (OK)</b></div>
+                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>Arquivo Alvo</div>
+                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Arquivo: <b>CV202607.VCL</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Registro na <b>{num_formatado}</b></div>
                         </div>
                     """, unsafe_allow_html=True)
                 with col_c2:
                     st.markdown(f"""
                         <div style='background: #FEF2F2; border-left: 4px solid #E11D48; border-top: 1px solid #FECACA; border-right: 1px solid #FECACA; border-bottom: 1px solid #FECACA; padding: 12px; margin-bottom: 15px;'>
                             <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>{coluna_analisada}</div>
-                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Status: <b>Erro na {num_formatado}</b></div>
-                            <div style='font-size: 12px; color: #64748B; margin-top: 4px;'><b>Motivo:</b> {detalhe_erro}</div>
+                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Status: <b>Não Encontrado nas Liquidações</b></div>
+                            <div style='font-size: 11px; color: #64748B; margin-top: 4px;'><b>Motivo:</b> {detalhe_erro}</div>
                         </div>
                     """, unsafe_allow_html=True)
 
