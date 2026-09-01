@@ -530,7 +530,7 @@ with aba2:
                 st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório de Divergências: Arquivo Local vs. API SIM 2.0")
+        st.markdown("##### 3. Relatório de Divergências: Mapeamento de Linhas e Campos")
         
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         nome_arq = arq_obj.name if arq_obj else "Arquivo não informado"
@@ -538,35 +538,46 @@ with aba2:
         
         st.info(f"📁 **Arquivo Analisado:** `{nome_arq}` ({len(linhas_locais)} linhas totais lidas)")
         
-        st.markdown("#### ⚠️ Inconsistências e Divergências Encontradas nos Campos")
+        relatorio_erros_input = st.text_area(
+            "Cole aqui o relatório completo de inconsistência do TCE (com as linhas e descrições do erro):",
+            placeholder="Ex: Descrição: Não há relação com o(s) campo(s)... Linha(s): 6,7,8,9...",
+            height=120
+        )
         
-        dados_divergencia = [
-            {"Linha": "12", "Campo / Atributo": "nu_licitacao", "Valor no Arquivo Local": "2026031001", "Status na API do TCE": "Não Encontrado / Divergente", "Correção Necessária": "Verificar se a licitação foi transmitida no lote anterior."},
-            {"Linha": "18", "Campo / Atributo": "cpf_responsavel", "Valor no Arquivo Local": "000.***.***-00", "Status na API do TCE": "Divergência Cadastral", "Correção Necessária": "Atualizar o CPF do ordenador na base de gestores."},
-            {"Linha": "25", "Campo / Atributo": "cd_unid_orc", "Valor no Arquivo Local": "0502", "Status na API do TCE": "Unidade Inativa na LOA", "Correção Necessária": "Ajustar o código da unidade orçamentária conforme o arquivo .BAS."}
-        ]
-        
-        st.dataframe(pd.DataFrame(dados_divergencia), use_container_width=True)
+        if st.button("Processar Linhas e Mapear Erros", type="primary"):
+            st.session_state["relatorio_erros_processado"] = relatorio_erros_input
 
-        st.markdown("")
-        col_res1, col_res2 = st.columns(2)
-        with col_res1:
-            st.markdown("""
-                <div style='background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; padding: 14px;'>
-                    <div style='font-size: 12px; font-weight: 700; color: #64748B; text-transform: uppercase;'>Resumo da Auditoria</div>
-                    <div style='font-size: 15px; font-weight: 700; color: #0F172A; margin-top: 6px;'>3 Inconsistências Críticas</div>
-                    <p style='font-size: 13px; color: #334155; margin-top: 8px;'>O sistema cruzou as linhas do seu arquivo enviado com os dados oficiais da API 2.0 do SIM e identificou chaves primárias divergentes.</p>
-                </div>
-            """, unsafe_allow_html=True)
+        texto_analise = st.session_state.get("relatorio_erros_processado", "")
+        
+        if texto_analise:
+            matches_linhas = re.findall(r'Linha\(s\):\s*([\d,\s]+)', texto_analise)
+            linhas_extraidas = []
+            if matches_linhas:
+                bruto = "".join(matches_linhas).replace(" ", "")
+                linhas_extraidas = [l for l in bruto.split(",") if l.isdigit()]
             
-        with col_res2:
-            st.markdown("""
-                <div style='background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 14px;'>
-                    <div style='font-size: 12px; font-weight: 700; color: #047857; text-transform: uppercase;'>Ação Recomendada</div>
-                    <div style='font-size: 15px; font-weight: 700; color: #065F46; margin-top: 6px;'>Corrigir e Retransmitir</div>
-                    <p style='font-size: 13px; color: #064E3B; margin-top: 8px;'><b>Dica:</b> Ajuste os campos indicados na tabela acima no seu ERP de origem e gere o arquivo novamente.</p>
-                </div>
-            """, unsafe_allow_html=True)
+            match_campos = re.search(r'\(([^)]+)\)', texto_analise)
+            campos_envolvidos = match_campos.group(1) if match_campos else "Campos da chave referencial"
+
+            st.markdown("#### ⚠️ Mapeamento Dinâmico de Inconsistências por Linha")
+            
+            if linhas_extraidas:
+                dados_dinamicos = []
+                for linha_num in linhas_extraidas[:100]:
+                    dados_dinamicos.append({
+                        "Linha": linha_num,
+                        "Módulo / Arquivo": nome_arq,
+                        "Campos Afetados": campos_envolvidos,
+                        "Status / Diagnóstico": "Chave Orçamentária / Referencial Não Encontrada",
+                        "Ação Corretiva": "Transmitir arquivos .BAS (Orçamento) correspondentes antes deste módulo."
+                    })
+                
+                st.success(f"Foram identificadas **{len(linhas_extraidas)} linhas** com inconsistência neste relatório!")
+                st.dataframe(pd.DataFrame(dados_dinamicos), use_container_width=True)
+            else:
+                st.warning("Não foi possível extrair os números das linhas automaticamente. Certifique-se de colar o relatório no formato padrão do validador.")
+        else:
+            st.info("💡 Cole o relatório de inconsistências do validador no campo acima para gerar a tabela com todas as linhas afetadas.")
 
         st.markdown("")
         if st.button("Fazer Nova Auditoria com Outro Arquivo"):
