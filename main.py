@@ -530,54 +530,70 @@ with aba2:
                 st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório de Divergências: Mapeamento Automático por Linha")
+        st.markdown("##### 3. Relatório de Divergências: Cruzamento Real com a API do TCE-CE")
         
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         nome_arq = arq_obj.name if arq_obj else "Arquivo não informado"
         linhas_locais = st.session_state.get("linhas_arquivo_local", [])
         relatorio_input = st.session_state.get("linhas_locais_input", "")
+        dados_api = st.session_state.get("dados_api_retorno", [])
         
-        st.info(f"📁 **Arquivo Analisado:** `{nome_arq}` ({len(linhas_locais)} linhas totais lidas)")
-        st.markdown("#### ⚠️ Inconsistências e Mapeamento de Linhas")
+        st.info(f"📁 **Arquivo Analisado:** `{nome_arq}` ({len(linhas_locais)} linhas totais lidas) | 🌐 **Registros na API:** {len(dados_api)}")
+        st.markdown("#### ⚠️ Resultado do Cruzamento Real")
 
-        # 1. Tenta extrair linhas específicas se o usuário colou um relatório no Passo 1
+        # Extrai as linhas específicas informadas pelo usuário
         linhas_para_exibir = []
         if relatorio_input:
             matches = re.findall(r'(\d+)', relatorio_input)
             if matches:
-                # Remove duplicadas preservando a ordem
                 linhas_para_exibir = list(dict.fromkeys([int(m) for m in matches if m.isdigit()]))
 
         dados_dinamicos = []
         
-        if linhas_para_exibir:
-            # Caso tenha informado números de linhas no Passo 1
-            for num_linha in linhas_para_exibir:
-                conteudo_linha = linhas_locais[num_linha - 1] if 0 < num_linha <= len(linhas_locais) else "Linha além do tamanho do arquivo"
+        # Define quais linhas serão auditadas (se informou linhas específicas, pega elas; senão, pega as primeiras 50)
+        alvos = linhas_para_exibir if linhas_para_exibir else list(range(1, min(len(linhas_locais) + 1, 51)))
+
+        for num_linha in alvos:
+            if 0 < num_linha <= len(linhas_locais):
+                conteudo_linha = linhas_locais[num_linha - 1]
+                
+                # Quebra os campos da linha separados por vírgula ou aspas
+                campos_linha = [c.strip('"') for c in conteudo_linha.split(",")]
+                
+                # Executa o cruzamento real buscando se os dados da linha constam no JSON da API
+                encontrou_na_api = False
+                if dados_api:
+                    texto_api_global = str(dados_api).lower()
+                    match_encontrado = any(campo.lower() in texto_api_global for campo in campos_linha if len(campo) > 2)
+                    if match_encontrado:
+                        encontrou_na_api = True
+
+                if dados_api and not encontrou_na_api:
+                    status_val = "❌ Divergente: Não localizado na base da API do TCE"
+                    acao_val = "Verificar se o registro foi transmitido ou se há erro nos códigos chave."
+                elif not dados_api:
+                    status_val = "⚠️ API Indisponível / Sem Retorno para Cruzamento"
+                    acao_val = "Validar credenciais ou parâmetros de conexão com o TCE."
+                else:
+                    status_val = "✅ Compatível com os dados da API"
+                    acao_val = "Nenhuma ação necessária."
+
                 dados_dinamicos.append({
                     "Linha": num_linha,
                     "Arquivo / Módulo": nome_arq,
-                    "Conteúdo / Registro Local": conteudo_linha[:60] + "..." if len(conteudo_linha) > 60 else conteudo_linha,
-                    "Status na API / Validador": "Chave Orçamentária / Referencial Não Encontrada",
-                    "Ação Corretiva": "Verificar se as tabelas de referência (.BAS/LOA) foram enviadas previamente."
+                    "Conteúdo Analisado": conteudo_linha[:50] + "..." if len(conteudo_linha) > 50 else conteudo_linha,
+                    "Status do Cruzamento (API)": status_val,
+                    "Ação Recomendada": acao_val
                 })
-            st.success(f"Mapeamento concluído! Foram processadas as **{len(linhas_para_exibir)} linhas específicas** apontadas.")
-        else:
-            # Caso não tenha especificado, lê e mapeia do próprio arquivo carregado
-            for idx, conteudo_linha in enumerate(linhas_locais[:100], start=1):
-                dados_dinamicos.append({
-                    "Linha": idx,
-                    "Arquivo / Módulo": nome_arq,
-                    "Conteúdo / Registro Local": conteudo_linha[:60] + "..." if len(conteudo_linha) > 60 else conteudo_linha,
-                    "Status na API / Validador": "Chave Orçamentária / Referencial Divergente",
-                    "Ação Corretiva": "Conferir a integridade dos campos vinculados (cd_municipio, cd_orgao, cd_unid_orc)."
-                })
-            st.success(f"Mapeamento automático realizado no arquivo carregado! **{len(linhas_locais)} linhas totais** analisadas.")
 
         if dados_dinamicos:
+            if linhas_para_exibir:
+                st.success(f"Cruzamento real executado para as **{len(linhas_para_exibir)} linhas específicas** apontadas.")
+            else:
+                st.success(f"Cruzamento real executado automaticamente nas primeiras linhas do arquivo.")
             st.dataframe(pd.DataFrame(dados_dinamicos), use_container_width=True)
         else:
-            st.warning("Não foi possível extrair os dados das linhas. Volte ao Passo 1 e recarregue o arquivo.")
+            st.warning("Nenhuma linha válida encontrada para auditoria.")
 
         st.markdown("")
         if st.button("Fazer Nova Auditoria com Outro Arquivo"):
