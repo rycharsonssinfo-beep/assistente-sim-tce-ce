@@ -222,29 +222,48 @@ with aba2:
 
     if passo == 1:
         st.markdown("##### 1. Configurar Parâmetros e Enviar Arquivo Local")
-        st.caption("Selecione o arquivo local e o endpoint real da API de Dados Abertos do TCE-CE.")
+        st.caption("Selecione o arquivo local e o endpoint oficial da frota/veículos conforme a documentação da API.")
         
         arquivo_auditoria = st.file_uploader("Selecione o arquivo local (.VCL, .LCO, .BAS, .PAT, etc.)", type=["lco", "bas", "vcl", "pat", "txt", "csv"])
         
         col_c1, col_c2 = st.columns(2)
         with col_c1:
+            # Endpoints reais detalhados da frota mapeados da documentação oficial
             endpoint_metodo = st.selectbox(
-                "Recurso / Endpoint Oficial da API", 
-                ["veiculos", "licitacoes", "contratos", "patrimonio", "unidades_orcamentarias", "despesas", "receitas"]
+                "Recurso / Endpoint Oficial da API (Veículos/Frota)", 
+                [
+                    "veiculos_municipais", 
+                    "veiculos_locados", 
+                    "veiculos_cedidos_terceiros", 
+                    "destinacao_veiculos", 
+                    "baixa_destinacao_veiculos", 
+                    "controle_abastecimento_veiculos", 
+                    "controle_manutencao_veiculos"
+                ]
             )
         with col_c2:
             exercicio_api = st.selectbox("Exercício (Ano)", ["2026", "2025", "2024"], index=0)
 
-        codigo_municipio = st.text_input("Código do Município (Obrigatório em alguns endpoints)", placeholder="Ex: 123 ou deixe vazio")
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            codigo_municipio = st.text_input("Código do Município (Obrigatório *)", placeholder="Ex: 123")
+        with col_p2:
+            data_referencia_doc = st.text_input("Data de Referência da Doc. (Obrigatório * ex: 202601)", placeholder="Ex: 202601")
+
         linhas_locais_input = st.text_area("Linhas Específicas / Relatório do Validador", placeholder="Ex: 7, 8, 9, 10 ou deixe em branco para varredura geral")
         
         if st.button("Consultar API Real do TCE-CE →", type="primary"):
             if not arquivo_auditoria:
                 st.error("Por favor, envie um arquivo local.")
+            elif not codigo_municipio.strip():
+                st.error("O parâmetro 'codigo_municipio' é obrigatório para este endpoint da API.")
+            elif not data_referencia_doc.strip():
+                st.error("O parâmetro 'data_referencia_doc' é obrigatório para este endpoint da API.")
             else:
                 st.session_state["endpoint_metodo"] = endpoint_metodo
                 st.session_state["exercicio_api"] = exercicio_api
-                st.session_state["codigo_municipio"] = codigo_municipio
+                st.session_state["codigo_municipio"] = codigo_municipio.strip()
+                st.session_state["data_referencia_doc"] = data_referencia_doc.strip()
                 st.session_state["arquivo_auditoria_obj"] = arquivo_auditoria
                 st.session_state["linhas_locais_input"] = linhas_locais_input
                 st.session_state["etapa_auditoria"] = 2
@@ -255,22 +274,28 @@ with aba2:
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         linhas_arquivo = arq_obj.getvalue().decode("latin1").splitlines() if arq_obj else []
 
-        endpoint_usuario = st.session_state.get('endpoint_metodo', 'veiculos')
+        endpoint_usuario = st.session_state.get('endpoint_metodo', 'veiculos_municipais')
         url_base_api = f"https://api-dados-abertos.tce.ce.gov.br/sim/{endpoint_usuario}"
         
-        params = {"exercicio": st.session_state.get('exercicio_api', '2026')}
-        if st.session_state.get('codigo_municipio'):
-            params["cd_municipio"] = st.session_state.get('codigo_municipio')
+        # Parâmetros obrigatórios exigidos pela documentação oficial da API de veículos
+        params = {
+            "codigo_municipio": st.session_state.get('codigo_municipio', ''),
+            "data_referencia_doc": st.session_state.get('data_referencia_doc', '')
+        }
 
         with st.spinner(f"Conectando a {url_base_api}..."):
             try:
                 resposta = requests.get(url_base_api, params=params, timeout=15)
                 if resposta.status_code == 200:
                     dados_brutos = resposta.json()
-                    st.session_state["dados_api_retorno"] = dados_brutos if isinstance(dados_brutos, list) else [dados_brutos]
+                    # A API retorna um objeto contendo a chave "elements" com a lista de registros
+                    if isinstance(dados_brutos, dict) and "elements" in dados_brutos:
+                        st.session_state["dados_api_retorno"] = dados_brutos["elements"]
+                    else:
+                        st.session_state["dados_api_retorno"] = dados_brutos if isinstance(dados_brutos, list) else [dados_brutos]
                 else:
                     st.session_state["dados_api_retorno"] = []
-            except:
+            except Exception:
                 st.session_state["dados_api_retorno"] = []
 
         st.session_state["linhas_arquivo_local"] = linhas_arquivo
@@ -312,10 +337,10 @@ with aba2:
                     acao_val = "Nenhuma ação necessária."
                 elif dados_api and not encontrou:
                     status_val = "❌ Divergente / Não localizado na API"
-                    acao_val = "Verificar parâmetros ou se o registro foi transmitido."
+                    acao_val = "Verificar se o RENAVAM/Placa foi transmitido."
                 else:
                     status_val = "⚠️ API Indisponível / Sem Retorno para Cruzamento"
-                    acao_val = "Validar credenciais ou parâmetros obrigatórios (ex: Município)."
+                    acao_val = "Validar parâmetros obrigatórios (Código do Município e Data de Referência)."
 
                 dados_dinamicos.append({
                     "Linha": num_linha,
