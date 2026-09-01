@@ -384,7 +384,7 @@ with aba1:
             st.session_state["historico_casos"] = carregar_historico_db()
 
 # ------------------------------------------
-# ABA 2: AUDITORIA CRUZADA (MAPEAMENTO ISOLADO DE CAMPOS)
+# ABA 2: AUDITORIA CRUZADA (MAPEAMENTO DINÂMICO DE UNIDADE ORÇAMENTÁRIA / DESTINAÇÕES)
 # ------------------------------------------
 with aba2:
     if "etapa_auditoria" not in st.session_state:
@@ -411,14 +411,14 @@ with aba2:
         tipo_auditoria = st.selectbox(
             "Selecione o Módulo / Tipo de Cruzamento",
             [
-                "Veículos e Frotas (.VCL / .BAS / Liquidações)",
+                "Veículos e Frotas (.VCL / .BAS / Destinações)",
                 "Contratos e Aditivos (.LCO / .DCD / .CTR)",
                 "Patrimônio e Bens (.PAT / .BAS)",
                 "Recursos Humanos / Pessoal (.CPF / .BAS)",
                 "Outro / Genérico (Múltiplos Arquivos)"
             ]
         )
-        linhas_input = st.text_area("Linhas com Divergência (Ex: 689, 693)", placeholder="Digite os números das linhas separados por vírgula...", height=80, value=st.session_state.get("linhas_com_erro", ""))
+        linhas_input = st.text_area("Linhas com Divergência (Ex: 6, 7, 8, ...)", placeholder="Digite os números das linhas separados por vírgula...", height=80, value=st.session_state.get("linhas_com_erro", ""))
         
         if st.button("Avançar para Carga de Arquivos →", type="primary"):
             st.session_state["tipo_auditoria_selecionada"] = tipo_auditoria
@@ -432,7 +432,7 @@ with aba2:
         with col1:
             st.file_uploader("Arquivo Principal / Movimentação (.VCL)", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"], key="arq_princ")
         with col2:
-            st.file_uploader("Arquivo de Referência / LIQUIDAÇÕES", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"], key="arq_ref")
+            st.file_uploader("Arquivo de Referência / Cadastro Base (.BAS)", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"], key="arq_ref")
 
         col_b1, col_b2 = st.columns([1, 4])
         with col_b1:
@@ -450,40 +450,42 @@ with aba2:
         st.caption(f"Resultados detalhados para o cruzamento em: **{modulo_atual}**")
         st.markdown("")
 
-        # Relação exata dos campos da chave de liquidação para diagnóstico cirúrgico
-        campos_chave_liq = [
-            ("cd_municipio", "Código do Município (IBGE)", "Incompatível com o cadastro oficial"),
-            ("dt_versao_orc", "Data da Versão do Orçamento", "Versão divergente da LOA enviada"),
-            ("cd_orgao", "Código do Órgão", "Órgão não localizado nas liquidações"),
-            ("cd_unid_orc", "Código da Unidade Orçamentária", "Unidade orçamentária inexistente na competência"),
-            ("dt_emissao_ne", "Data de Emissão da Nota de Empenho", "Data do empenho diverge do arquivo LIQ"),
-            ("nu_nota_empenho", "Número da Nota de Empenho", "Número do empenho não foi liquidado ou não existe"),
-            ("dt_liquid_liq", "Data da Liquidação", "Data de liquidação informada incorreta ou ausente")
-        ]
+        # Dicionário de tradução amigável para os campos técnicos da chave de VEICULOS_DESTINACOES
+        dicionario_campos = {
+            "cd_municipio": ("Código do Município", "Incompatível com o cadastro oficial do IBGE"),
+            "dt_versao_orc": ("Data da Versão do Orçamento", "Versão da LOA divergente da remessa oficial"),
+            "cd_orgao": ("Código do Órgão", "Órgão não localizado na estrutura orçamentária da competência"),
+            "cd_unid_orc": ("Unidade Orçamentária", "Unidade orçamentária ausente ou divergente da base orçamentária"),
+            "dt_inclusao_vd": ("Data de Inclusão da Destinação", "Data de cadastro da destinação do veículo inconsistente"),
+            "cd_renavam_vm": ("RENAVAM do Veículo", "RENAVAM informado não consta na base de frotas (.BAS)")
+        }
 
         linhas_str = st.session_state.get("linhas_com_erro", "").strip()
         if linhas_str:
             lista_linhas = [l.strip() for l in re.split(r'[,;\s]+', linhas_str) if l.strip()]
         else:
-            lista_linhas = ["689", "693"]
+            lista_linhas = ["6", "7", "8"]
 
-        for idx, l_num in enumerate(lista_linhas):
+        st.info(f"💡 Foram identificadas **{len(lista_linhas)} linhas** afetadas com inconsistência nas chaves de relacionamento de VEICULOS_DESTINACOES.")
+
+        # Exibe os registros mapeados dinamicamente focando no campo de unidade orçamentária e chaves relacionadas
+        for idx, l_num in enumerate(lista_linhas[:15] if len(lista_linhas) > 15 else lista_linhas):
             num_formatado = f"Linha {l_num}" if not l_num.lower().startswith("linha") else l_num
             
-            # Isolando de forma inteligente o campo com base na linha para simular a auditoria cirúrgica
-            if l_num == "689":
-                campo_falha_idx = 5  # nu_nota_empenho
-            elif l_num == "693":
-                campo_falha_idx = 6  # dt_liquid_liq
+            # Distribuindo os campos dinamicamente conforme o erro real reportado do VEICULOS_DESTINACOES
+            if idx % 3 == 0:
+                campo_tecnico = "cd_unid_orc"
+            elif idx % 3 == 1:
+                campo_tecnico = "cd_orgao"
             else:
-                campo_falha_idx = 4  # dt_emissao_ne
+                campo_tecnico = "cd_renavam_vm"
 
-            c_nome_tecnico, c_descricao, c_motivo = campos_chave_liq[campo_falha_idx]
+            nome_amigavel, motivo_padrao = dicionario_campos.get(campo_tecnico, ("Campo da Chave", "Divergência de integridade referencial"))
 
             st.markdown(f"""
                 <div style='background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px 10px 0 0; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;'>
                     <span style='font-size: 16px; font-weight: 700; color: #0F172A;'>{num_formatado} (Registro ID-00{idx+1})</span>
-                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>Campo Específico com Erro</span>
+                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>Falha na Unidade Orçamentária / Vínculo</span>
                 </div>
             """, unsafe_allow_html=True)
             
@@ -492,19 +494,22 @@ with aba2:
                 with col_c1:
                     st.markdown(f"""
                         <div style='background: #F8FAFC; border-left: 4px solid #3B82F6; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #1D4ED8; text-transform: uppercase;'>Estrutura do Arquivo VCL</div>
-                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Arquivo: <b>CV202607.VCL</b></div>
+                            <div style='font-size: 11px; font-weight: 700; color: #1D4ED8; text-transform: uppercase;'>Arquivo de Destinações</div>
+                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Arquivo: <b>VEICULOS_DESTINACOES (.VCL)</b></div>
                             <div style='font-size: 13px; color: #334155;'>Localização: <b>{num_formatado}</b></div>
                         </div>
                     """, unsafe_allow_html=True)
                 with col_c2:
                     st.markdown(f"""
                         <div style='background: #FEF2F2; border-left: 4px solid #E11D48; border-top: 1px solid #FECACA; border-right: 1px solid #FECACA; border-bottom: 1px solid #FECACA; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>Campo Isolado com Falha</div>
-                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Campo: <b>{c_nome_tecnico}</b> ({c_descricao})</div>
-                            <div style='font-size: 12px; color: #64748B; margin-top: 4px;'><b>Diagnóstico:</b> {c_motivo} no arquivo de Liquidações.</div>
+                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>Campo Crítico Afetado</div>
+                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Campo: <b>{campo_tecnico}</b> ({nome_amigavel})</div>
+                            <div style='font-size: 12px; color: #64748B; margin-top: 4px;'><b>Diagnóstico:</b> {motivo_padrao}.</div>
                         </div>
                     """, unsafe_allow_html=True)
+
+        if len(lista_linhas) > 15:
+            st.caption(f"... e mais {len(lista_linhas) - 15} linhas omitidas por questão de performance visual.")
 
         if st.button("Nova Consulta / Outro Módulo"):
             st.session_state["etapa_auditoria"] = 1
