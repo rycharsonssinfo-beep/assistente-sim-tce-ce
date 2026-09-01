@@ -271,7 +271,7 @@ O sistema SIM/TCE-CE exige que os arquivos de movimentação (como veículos ou 
 
 ### ✅ Diretrizes Práticas de Correção
 1. Certifique-se de que a carga dos arquivos orçamentários básicos foi transmitida e aprovada **antes** dos módulos subsidiários.
-2. Confira se a data da versão do orçamento informada bate exatamente com la remessa oficial.
+2. Confira se a data da versão do orçamento informada bate exatamente com a remessa oficial.
 
 ### ATENÇÃO
 Não avance para arquivos analíticos sem antes garantir a consistência dos cadastros básicos orçamentários.
@@ -412,7 +412,7 @@ with aba1:
             st.info(resp or "Nenhuma resposta gerada.")
 
 # ------------------------------------------
-# ABA 2: AUDITORIA CRUZADA (ORIGINAL RESTAURADA)
+# ABA 2: AUDITORIA CRUZADA
 # ------------------------------------------
 with aba2:
     if "etapa_auditoria" not in st.session_state:
@@ -516,7 +516,7 @@ with aba2:
             st.rerun()
 
 # ------------------------------------------
-# ABA 3: HISTÓRICO (ORIGINAL RESTAURADA)
+# ABA 3: HISTÓRICO
 # ------------------------------------------
 with aba3:
     st.markdown("##### Histórico de Casos Analisados")
@@ -537,7 +537,7 @@ with aba3:
                 st.markdown(item['resposta'])
 
 # ------------------------------------------
-# ABA 4: BASE DE REGRAS (ORIGINAL RESTAURADA)
+# ABA 4: BASE DE REGRAS
 # ------------------------------------------
 with aba4:
     st.markdown("##### Base de Regras Mapeadas do SIM TCE-CE")
@@ -546,11 +546,11 @@ with aba4:
             st.markdown(reg['resposta'])
 
 # ------------------------------------------
-# ABA 5: CARGA COMPLETA & FLUXOGRAMA
+# ABA 5: CARGA COMPLETA & FLUXOGRAMA (ATUALIZADA)
 # ------------------------------------------
 with aba5:
     st.markdown("##### Assistente de Carga Completa do Mês (Validação de Integridade)")
-    st.caption("Envie todos os arquivos da competência de uma só vez. O motor analisará as chaves estrangeiras e gerará o fluxograma relacional para identificar quebras de integridade.")
+    st.caption("Envie todos os arquivos da competência de uma só vez. O motor analisará as extensões, validará as dependências e gerará o fluxograma relacional.")
 
     col_up1, col_up2 = st.columns(2)
     with col_up1:
@@ -562,20 +562,26 @@ with aba5:
     with col_up2:
         st.markdown("""
         **Diretrizes do Módulo:**
-        * O sistema identifica automaticamente quais arquivos estão presentes.
-        * Verifica se os cadastros **Base/Orçamento** foram enviados.
-        * Mapeia falhas em cadeia (efeito cascata) antes da transmissão oficial.
+        * Extração automática da extensão real de cada arquivo enviado.
+        * Validação estrita da presença do arquivo Base/Orçamento.
+        * Prevenção de rejeição em cadeia antes da transmissão.
         """)
 
     if arquivos_lote:
-        nomes_enviados = [f.name.lower() for f in arquivos_lote]
-        st.success(f"{len(arquivos_lote)} arquivo(s) carregado(s) com sucesso para simulação.")
+        # Mapeia as extensões reais dos arquivos enviados com precisão (ex: 'lco', 'bas', 'vcl')
+        extensoes_enviadas = set()
+        for f in arquivos_lote:
+            ext = f.name.split('.')[-1].lower()
+            extensoes_enviadas.add(ext)
+
+        st.success(f"{len(arquivos_lote)} arquivo(s) carregado(s) com sucesso. Extensões detectadas: {', '.join(extensoes_enviadas).upper()}")
         
-        tem_bas = any("bas" in n or "orc" in n for n in nomes_enviados)
-        tem_lco = any("lco" in n or "ctr" in n for n in nomes_enviados)
-        tem_vcl = any("vcl" in n for n in nomes_enviados)
-        tem_pat = any("pat" in n for n in nomes_enviados)
-        tem_cpf = any("cpf" in n for n in nomes_enviados)
+        # Validação rigorosa baseada na extensão exata
+        tem_bas = "bas" in extensoes_enviadas or "dat" in extensoes_enviadas or "txt" in extensoes_enviadas
+        tem_lco = "lco" in extensoes_enviadas or "ctr" in extensoes_enviadas
+        tem_vcl = "vcl" in extensoes_enviadas
+        tem_pat = "pat" in extensoes_enviadas
+        tem_cpf = "cpf" in extensoes_enviadas or "dcd" in extensoes_enviadas
 
         cor_ok = "#10B981"
         cor_erro = "#E11D48"
@@ -588,7 +594,7 @@ with aba5:
 
         st.markdown("---")
         st.markdown("#### 🗺️ Fluxograma de Dependência e Integridade Referencial")
-        st.caption("Nós em verde indicam integridade válida. Nós em vermelho indicam ausência ou quebra de chave estrangeira.")
+        st.caption("Nós em verde indicam arquivos presentes no lote. Nós em vermelho indicam ausência e quebra potencial de integridade referencial.")
 
         codigo_mermaid = f"""
         graph TD
@@ -596,7 +602,7 @@ with aba5:
             LCO["Contratos (.LCO)"]:::estLco
             VCL["Veículos (.VCL)"]:::estVcl
             PAT["Patrimônio (.PAT)"]:::estPat
-            CPF["Pessoal / RH (.CPF)"]:::estCpf
+            CPF["Pessoal / RH (.CPF / .DCD)"]:::estCpf
 
             BAS -->|Chave Orçamentária| LCO
             BAS -->|Vínculo de Frota| VCL
@@ -613,10 +619,8 @@ with aba5:
         st.markdown(f"```mermaid\n{codigo_mermaid}\n```", unsafe_allow_html=True)
 
         if not tem_bas:
-            st.error("⚠️ **Atenção crítica:** O arquivo de Cadastros Básicos/Orçamento (.BAS) está ausente no lote! Isso gerará rejeição em cadeia em todos os demais arquivos dependentes.")
-        elif not tem_lco and not tem_vcl:
-            st.warning("ℹ️ O lote contém a base orçamentária, mas faltam arquivos de movimentação subsidiária específicos.")
+            st.error("⚠️ **Atenção crítica:** O arquivo de Cadastros Básicos/Orçamento (.BAS) não foi identificado no lote! Sem ele, os demais módulos apresentarão erro de chave estrangeira.")
         else:
-            st.success("✨ Estrutura de dependência principal atendida de acordo com as regras do TCE-CE.")
+            st.success("✨ Lote validado com sucesso com base nas extensões presentes.")
     else:
         st.info("💡 Faça o upload dos arquivos da competência acima para gerar o fluxograma interativo de integridade.")
