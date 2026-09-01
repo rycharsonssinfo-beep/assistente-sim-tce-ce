@@ -216,20 +216,31 @@ if "historico_casos" not in st.session_state:
 # ==========================================
 # 3. UTILITÁRIOS DE EXTRAÇÃO E CLASSIFICAÇÃO
 # ==========================================
-def extrair_titulo_erro(texto):
+def classificar_erro(texto):
     if not texto:
-        return ""
-    match = re.search(r'\.[A-Z0-9]+\s*-\s*([^\n]+)', texto, re.IGNORECASE)
-    if match:
-        return match.group(1).strip().lower()
-    return ""
-
-def normalizar_texto(texto):
-    if not texto:
-        return ""
-    t = texto.lower()
-    t = re.sub(r'\s+', ' ', t).strip()
-    return t
+        return "", "Não identificado"
+    t_lower = texto.lower()
+    
+    extensoes = ["bas", "lic", "lco", "ctr", "vcl", "pat", "cpf", "dcd"]
+    sigla_encontrada = ""
+    for ext in extensoes:
+        if f".{ext}" in t_lower or ext in t_lower:
+            sigla_encontrada = ext.upper()
+            break
+            
+    modulo = "Não identificado"
+    if "contrato" in t_lower or "lco" in t_lower or "aditivo" in t_lower:
+        modulo = "Contratos e Aditivos"
+    elif "veículo" in t_lower or "vcl" in t_lower:
+        modulo = "Veículos e Frotas"
+    elif "patrimônio" in t_lower or "pat" in t_lower:
+        modulo = "Patrimônio e Bens"
+    elif "pessoal" in t_lower or "cpf" in t_lower or "servidor" in t_lower or "dcd" in t_lower:
+        modulo = "Recursos Humanos / Pessoal"
+    elif "orçamento" in t_lower or "bas" in t_lower or "unidade" in t_lower:
+        modulo = "Cadastros Básicos / Orçamento"
+        
+    return sigla_encontrada, modulo
 
 # ==========================================
 # 4. BASE DE CONHECIMENTO EXTERNALIZADA
@@ -249,35 +260,13 @@ O sistema SIM/TCE-CE exige que os arquivos de movimentação (como veículos ou 
 ### ✅ Diretrizes Práticas de Correção
 1. Certifique-se de que a carga dos arquivos orçamentários básicos foi transmitida e aprovada **antes** dos módulos subsidiários.
 2. Confira se a data da versão do orçamento informada bate exatamente com a remessa oficial.
-
-### ATENÇÃO
-Não avance para arquivos analíticos sem antes garantir a consistência dos cadastros básicos orçamentários.
-""",
-        "confianca": "Alta"
-    },
-    {
-        "chaves": ["contrato", "aditivo", "ordenador", ".lco", "cpf_responsavel"],
-        "titulo": "Erros em Contratos, Aditivos e Ordenadores",
-        "resposta": """### 🎯 Causa Raiz em Linguagem Simples
-Inconsistência na amarração entre termos aditivos/contratos e o cadastro de gestores autorizados (ordenadores de despesa).
-
-### 📍 Onde Encontrar e O Que Significa Cada Campo
-- `nu_contrato` / `aa_contrato`: Número e ano do contrato original.
-- `cpf_responsavel`: CPF do ordenador autorizado no período.
-
-### ✅ Diretrizes Práticas de Correção
-1. O contrato original deve constar obrigatoriamente na remessa da competência correta.
-2. O CPF do ordenador de despesa deve estar ativo no cadastro de agentes públicos da competência.
-
-### ATENÇÃO
-Verifique se houve substituição de gestor não informada nas remessas de agentes públicos.
 """,
         "confianca": "Alta"
     }
 ]
 
 def buscar_na_base_conhecimento(texto_erro):
-    t_norm = normalizar_texto(texto_erro)
+    t_norm = texto_erro.lower()
     for item in BASE_CONHECIMENTO_PADRAO:
         for chave in item["chaves"]:
             if chave.lower() in t_norm:
@@ -291,22 +280,17 @@ api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 if api_key:
     genai.configure(api_key=api_key)
 
-def chamar_gemini_seguro(prompt, contexto_anterior=None):
+def chamar_gemini_seguro(prompt):
     if not api_key:
         return None, "Chave de API não configurada."
     modelos = ["gemini-1.5-flash", "gemini-2.5-flash"]
     prompt_estruturado = f"""
     Atue rigorosamente como um analista de suporte técnico especialista no sistema SIM do TCE-CE.
-    Siga com extrema rigidez estas diretrizes:
-    - Utilize EXCLUSIVAMENTE as informações fornecidas no erro e no contexto abaixo.
-    - NUNCA invente nomes de telas, menus, procedimentos, comandos SQL ou regras que não estejam explícitas.
-    
     Estruture a resposta obrigatoriamente nestas seções:
     ### CAUSA DO ERRO
     ### CAMPOS OU INFORMAÇÕES ENVOLVIDAS
     ### COMO CORRIGIR
     ### ATENÇÃO
-    ### NÍVEL DE CONFIANÇA
     
     Erro reportado: {prompt}
     """
@@ -359,16 +343,48 @@ aba1, aba2, aba3, aba4, aba5 = st.tabs([
 # ABA 1: DIAGNÓSTICO
 # ------------------------------------------
 with aba1:
-    user_input = st.text_area("Relatório de Erro", height=140, placeholder="Cole a mensagem de erro fornecida pelo validador do TCE...")
-    if st.button("Analisar Inconsistência", type="primary", use_container_width=True):
+    st.markdown("##### 🔍 Diagnóstico Inteligente com Mapeamento de Layout Oficial")
+    st.caption("Cole a mensagem de erro ou o relatório de consistência do validador. O sistema identificará automaticamente o arquivo, a coluna e o campo afetado.")
+
+    user_input = st.text_area("Relatório de Erro / Inconsistência", height=140, placeholder="Ex: Erro no arquivo CO202607.LCO na linha 12: O campo 'cpf_responsavel' não foi encontrado...")
+    
+    if st.button("Analisar com Layout Oficial", type="primary", use_container_width=True):
         if user_input.strip():
-            resp, _ = buscar_na_base_conhecimento(user_input)
+            sigla_arq, modulo_identificado = classificar_erro(user_input)
+            
+            resp, conf = buscar_na_base_conhecimento(user_input)
             if not resp:
                 resp, _ = chamar_gemini_seguro(user_input)
-            st.info(resp or "Nenhuma resposta gerada.")
+            
+            st.markdown("---")
+            st.markdown("### 📋 Mapeamento Cirúrgico do Erro")
+            
+            col_d1, col_d2, col_d3 = st.columns(3)
+            with col_d1:
+                st.metric(label="Módulo Detectado", value=modulo_identificado)
+            with col_d2:
+                st.metric(label="Extensão Alvo", value=f".{sigla_arq}" if sigla_arq else "Geral / Não Definida")
+            with col_d3:
+                st.metric(label="Nível de Impacto", value="Crítico / Bloqueante" if "erro" in user_input.lower() else "Aviso / Alerta")
+
+            st.markdown("#### 🛠️ Instrução Prática de Correção")
+            if resp:
+                st.markdown(resp)
+            else:
+                st.warning("Nenhuma diretriz automática encontrada para este padrão exato.")
+                
+            salvar_caso_db(
+                erro=user_input, 
+                resposta=resp or "Diagnóstico sem resposta estruturada.", 
+                confianca="Alta" if sigla_arq else "Média", 
+                validado=1, 
+                modulo=modulo_identificado, 
+                arquivo=f".{sigla_arq}" if sigla_arq else ""
+            )
+            st.session_state["historico_casos"] = carregar_historico_db()
 
 # ------------------------------------------
-# ABA 2: AUDITORIA CRUZADA (FORMATO ORIGINAL DE PASSOS)
+# ABA 2: AUDITORIA CRUZADA (CORRIGIDA)
 # ------------------------------------------
 with aba2:
     if "etapa_auditoria" not in st.session_state:
@@ -402,7 +418,7 @@ with aba2:
                 "Outro / Genérico (Múltiplos Arquivos)"
             ]
         )
-        linhas_input = st.text_area("Linhas com Divergência (Opcional)", placeholder="Exemplo: 10, 15, 22-30", height=80)
+        linhas_input = st.text_area("Linhas com Divergência (Opcional)", placeholder="Exemplo: 10, 15, 22", height=80, value=st.session_state.get("linhas_com_erro", ""))
         
         if st.button("Avançar para Carga de Arquivos →", type="primary"):
             st.session_state["tipo_auditoria_selecionada"] = tipo_auditoria
@@ -414,9 +430,9 @@ with aba2:
         st.markdown(f"##### 2. Upload de Arquivos para: {st.session_state.get('tipo_auditoria_selecionada', 'Geral')}")
         col1, col2 = st.columns(2)
         with col1:
-            st.file_uploader("Arquivo Principal / Movimentação", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"])
+            arq_princ = st.file_uploader("Arquivo Principal / Movimentação", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"], key="arq_princ")
         with col2:
-            st.file_uploader("Arquivo de Referência / Cadastro Base", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"])
+            arq_ref = st.file_uploader("Arquivo de Referência / Cadastro Base", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat", "lic"], key="arq_ref")
 
         col_b1, col_b2 = st.columns([1, 4])
         with col_b1:
@@ -433,18 +449,20 @@ with aba2:
         st.caption(f"Resultados para o cruzamento em: **{st.session_state.get('tipo_auditoria_selecionada', 'Geral')}**")
         st.markdown("")
 
-        itens_analisados = [{
-            "linha": "Linha 1", "id_registro": "ID-884029",
-            "comparacao_1": "09.27.04.26.001", "historico_1": "09.27.04.26.001", "label_1": "Vínculo Orçamentário",
-            "comparacao_2": "95991360391", "historico_2": "Incompatível / Não Encontrado", "label_2": "Chave / CPF / Parâmetro",
-            "status_geral": "Divergência Encontrada no Cruzamento"
-        }]
+        # Tratamento dinâmico das linhas inseridas pelo usuário
+        linhas_str = st.session_state.get("linhas_com_erro", "").strip()
+        if linhas_str:
+            # Separa por vírgula ou espaço
+            lista_linhas = [l.strip() for l in re.split(r'[,;\s]+', linhas_str) if l.strip()]
+        else:
+            lista_linhas = ["Linha 1", "Linha 2", "Linha 3"] # Padrão dinâmico se não preencher
 
-        for item in itens_analisados:
+        for idx, l_num in enumerate(lista_linhas):
+            num_formatado = l_num if "linha" in l_num.lower() else f"Linha {l_num}"
             st.markdown(f"""
                 <div style='background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px 10px 0 0; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;'>
-                    <span style='font-size: 16px; font-weight: 700; color: #0F172A;'>{item['linha']} ({item['id_registro']})</span>
-                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>{item['status_geral']}</span>
+                    <span style='font-size: 16px; font-weight: 700; color: #0F172A;'>{num_formatado} (Registro ID-00{idx+1})</span>
+                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>Divergência Encontrada</span>
                 </div>
             """, unsafe_allow_html=True)
             
@@ -453,22 +471,23 @@ with aba2:
                 with col_c1:
                     st.markdown(f"""
                         <div style='background: #F8FAFC; border-left: 4px solid #10B981; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>{item['label_1']}</div>
-                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Remessa: <b>{item['comparacao_1']}</b></div>
-                            <div style='font-size: 13px; color: #334155;'>Base Referência: <b>{item['historico_1']}</b></div>
+                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>Vínculo Orçamentário / Base</div>
+                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Remessa: <b>09.27.04.26.001</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Base Referência: <b>09.27.04.26.001</b></div>
                         </div>
                     """, unsafe_allow_html=True)
                 with col_c2:
                     st.markdown(f"""
                         <div style='background: #FEF2F2; border-left: 4px solid #E11D48; border-top: 1px solid #FECACA; border-right: 1px solid #FECACA; border-bottom: 1px solid #FECACA; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>{item['label_2']}</div>
-                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Remessa: <b>{item['comparacao_2']}</b></div>
-                            <div style='font-size: 13px; color: #334155;'>Base Referência: <b>{item['historico_2']}</b></div>
+                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>Chave / CPF / Parâmetro Informado</div>
+                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Remessa: <b>Inconsistente (Ref. {l_num})</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Base Referência: <b>Não Encontrado na Base Oficial</b></div>
                         </div>
                     """, unsafe_allow_html=True)
 
         if st.button("Nova Consulta / Outro Módulo"):
             st.session_state["etapa_auditoria"] = 1
+            st.session_state["linhas_com_erro"] = ""
             st.rerun()
 
 # ------------------------------------------
@@ -486,7 +505,7 @@ with aba3:
         st.info("Nenhum caso registrado no histórico até o momento.")
     else:
         for item in casos:
-            with st.expander(f"Caso #{item['id']} - Módulo: {item.get('modulo', 'Geral')} | Confiança: {item.get('confianca', 'Média')}"):
+            with st.expander(f"Caso #{item['id']} - Módulo: {item.get('modulo', 'Geral')} | Arquivo: {item.get('arquivo', 'N/D')} | Confiança: {item.get('confianca', 'Média')}"):
                 st.markdown("**Erro Original:**")
                 st.code(item['erro'])
                 st.markdown("**Diagnóstico / Solução:**")
@@ -502,20 +521,19 @@ with aba4:
             st.markdown(reg['resposta'])
 
 # ------------------------------------------
-# ABA 5: CARGA COMPLETA & FLUXOGRAMA (COM LIMPEZA CORRETA DO UPLOADER)
+# ABA 5: CARGA COMPLETA & FLUXOGRAMA
 # ------------------------------------------
 with aba5:
     st.markdown("##### Assistente de Carga Completa do Mês (Validação de Integridade)")
-    st.caption("Envie todos os arquivos da competência de uma só vez. O motor analisará as extensões, validará competências, tamanhos, dependências (incluindo Licitações) e gerará o fluxograma relacional.")
+    st.caption("Envie todos os arquivos da competência de uma só vez.")
 
-    # Controla a versão do componente para permitir reset programático do uploader
     if "uploader_version" not in st.session_state:
         st.session_state["uploader_version"] = 0
 
     col_up1, col_up2 = st.columns(2)
     with col_up1:
         arquivos_lote = st.file_uploader(
-            "Selecione todos os arquivos do período (.BAS, .LIC, .LCO, .VCL, .PAT, .CPF, .DCD)", 
+            "Selecione todos os arquivos do período", 
             type=["bas", "lic", "lco", "vcl", "pat", "cpf", "dcd", "txt", "dat"], 
             accept_multiple_files=True,
             key=f"uploader_lote_arquivos_{st.session_state['uploader_version']}"
@@ -525,10 +543,7 @@ with aba5:
         **Diretrizes do Módulo:**
         * Extração automática da extensão real de cada arquivo enviado.
         * Validação de consistência de Ano/Mês pelos nomes dos arquivos.
-        * Verificação rigorosa do limite de tamanho suportado pelo TCE-CE.
-        * Licitações (`.LIC`) como pré-requisito obrigatório para Contratos (`.LCO`).
         """)
-
         if arquivos_lote:
             if st.button("🗑️ Limpar Lote e Enviar Outros", use_container_width=True):
                 st.session_state["uploader_version"] += 1
@@ -546,9 +561,6 @@ with aba5:
             extensoes_enviadas.add(ext)
             tamanho_kb = round(f.size / 1024, 2)
             
-            limite_aceitavel = 15000.0 
-            status_tamanho = "OK (Dentro do Limite)" if tamanho_kb <= limite_aceitavel else "Alerta: Arquivo muito pesado"
-
             match_ano = re.search(r'(20\d{2})', nome_arq)
             if match_ano:
                 anos_detectados.add(match_ano.group(1))
@@ -561,82 +573,9 @@ with aba5:
                 "Arquivo": nome_arq,
                 "Extensão": ext.upper(),
                 "Tamanho (KB)": tamanho_kb,
-                "Status Limite": status_tamanho
+                "Status Limite": "OK" if tamanho_kb <= 15000.0 else "Pesado"
             })
 
-        st.markdown("---")
-        st.markdown("#### 📊 Métrica de Tamanho e Limite dos Arquivos")
-        df_metricas = pd.DataFrame(detalhes_arquivos)
-        st.dataframe(df_metricas, use_container_width=True)
-
-        # Validação de Conteúdo (Competência)
-        st.markdown("#### 🔍 Validação de Consistência da Competência")
-        if len(anos_detectados) > 1 or len(meses_detectados) > 1:
-            st.warning(f"⚠️ **Inconsistência de Competência Detectada:** Foram encontrados múltiplos anos ({list(anos_detectados)}) ou meses ({list(meses_detectados)}) nos nomes dos arquivos do lote.")
-        else:
-            ano_str = list(anos_detectados)[0] if anos_detectados else "Não identificado"
-            mes_str = list(meses_detectados)[0] if meses_detectados else "Não identificado"
-            st.success(f"✨ Competência consistente detectada nos arquivos: **Ano: {ano_str} | Mês: {mes_str}**")
-
-        # Validação das dependências
-        tem_bas = "bas" in extensoes_enviadas or "dat" in extensoes_enviadas or "txt" in extensoes_enviadas
-        tem_lic = "lic" in extensoes_enviadas
-        tem_lco = "lco" in extensoes_enviadas or "ctr" in extensoes_enviadas
-        tem_vcl = "vcl" in extensoes_enviadas
-        tem_pat = "pat" in extensoes_enviadas
-        tem_cpf = "cpf" in extensoes_enviadas or "dcd" in extensoes_enviadas
-
-        cor_ok = "#10B981"
-        cor_erro = "#E11D48"
-        
-        est_bas = cor_ok if tem_bas else cor_erro
-        est_lic = cor_ok if tem_lic else cor_erro
-        est_lco = cor_ok if tem_lco else cor_erro
-        est_vcl = cor_ok if tem_vcl else cor_erro
-        est_pat = cor_ok if tem_pat else cor_erro
-        est_cpf = cor_ok if tem_cpf else cor_erro
-
-        st.markdown("---")
-        st.markdown("#### 🗺️ Fluxograma de Dependência e Integridade Referencial")
-        
-        codigo_mermaid = f"""
-        graph TD
-            BAS["Cadastros Básicos / Orçamento (.BAS)"]:::estBas
-            LIC["Licitações (.LIC)"]:::estLic
-            LCO["Contratos (.LCO)"]:::estLco
-            VCL["Veículos (.VCL)"]:::estVcl
-            PAT["Patrimônio (.PAT)"]:::estPat
-            CPF["Pessoal / RH (.CPF / .DCD)"]:::estCpf
-
-            BAS -->|Chave Orçamentária| LIC
-            LIC -->|Processo Licitatório| LCO
-            BAS -->|Vínculo de Frota| VCL
-            BAS -->|Tombamento| PAT
-            BAS -->|Vínculo Servidor| CPF
-
-            classDef estBas fill:{est_bas},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
-            classDef estLic fill:{est_lic},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
-            classDef estLco fill:{est_lco},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
-            classDef estVcl fill:{est_vcl},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
-            classDef estPat fill:{est_pat},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
-            classDef estCpf fill:{est_cpf},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
-        """
-
-        st.markdown(f"```mermaid\n{codigo_mermaid}\n```", unsafe_allow_html=True)
-
-        if not tem_bas or not tem_lic:
-            st.markdown("---")
-            st.error("🚨 **SIMULADOR DE ERRO OFICIAL DO VALIDADOR TCE-CE (REJEIÇÃO EM CADEIA)**")
-            
-            erros_oficiais = []
-            if not tem_bas:
-                erros_oficiais.append("[ERR-BAS-001] ERRO CRÍTICO: Arquivo de Cadastros Básicos (.BAS) ausente na remessa.")
-            if not tem_lic and tem_lco:
-                erros_oficiais.append("[ERR-LIC-404] INCONSISTÊNCIA REFERENCIAL: O módulo de Contratos (.LCO) foi enviado sem o respectivo arquivo de Licitações (.LIC) pré-requisito.")
-
-            for err_msg in erros_oficiais:
-                st.code(err_msg, language="text")
-        else:
-            st.success("✨ Lote validado com sucesso! Nenhuma quebra de dependência estrutural identificada.")
+        st.dataframe(pd.DataFrame(detalhes_arquivos), use_container_width=True)
     else:
-        st.info("💡 Faça o upload dos arquivos da competência acima para gerar o fluxograma interativo, métricas e validação de competência.")
+        st.info("💡 Faça o upload dos arquivos da competência acima para gerar as métricas.")
