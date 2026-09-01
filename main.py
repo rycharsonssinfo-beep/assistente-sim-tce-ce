@@ -243,23 +243,56 @@ def classificar_erro(texto):
     return sigla_encontrada, modulo
 
 # ==========================================
-# 4. BASE DE CONHECIMENTO EXTERNALIZADA
+# 4. BASE DE CONHECIMENTO EXTERNALIZADA (EXPANDIDA)
 # ==========================================
 BASE_CONHECIMENTO_PADRAO = [
     {
-        "chaves": ["unidades_orcamentarias", "cd_municipio", "dt_versao_orc", "cd_orgao", "cd_unid_orc", ".vcl", ".pat", "destinação de veículos"],
-        "titulo": "Erros de Unidades Orçamentárias e Vínculos",
-        "resposta": """### 🎯 Causa Raiz em Linguagem Simples
-O sistema SIM/TCE-CE exige que os arquivos de movimentação (como veículos ou patrimônio) estejam vinculados a uma unidade orçamentária válida e previamente cadastrada na competência orçamentária oficial.
+        "chaves": ["unidades_orcamentarias", "cd_municipio", "dt_versao_orc", "cd_orgao", "cd_unid_orc", ".vcl", "destinação de veículos"],
+        "titulo": "Veículos e Frotas: Unidades Orçamentárias e Vínculos (.VCL / .BAS)",
+        "resposta": """### 🎯 Causa Raiz
+O sistema SIM/TCE-CE exige que os registros do módulo de frotas estejam rigidamente vinculados a uma unidade orçamentária válida cadastrada na LOA da competência.
 
-### 📍 Onde Encontrar e O Que Significa Cada Campo
-- `cd_municipio`: Código oficial do município regulado pelo IBGE.
-- `dt_versao_orc`: Data da versão do orçamento vigente. Deve ser idêntica à LOA enviada.
-- `cd_orgao` e `cd_unid_orc`: Órgão e Unidade Orçamentária responsáveis.
+### 📍 Campos Envolvidos
+- `cd_municipio`: Código do município no IBGE.
+- `dt_versao_orc`: Versão do orçamento vigente.
+- `cd_orgao` / `cd_unid_orc`: Estrutura orçamentária responsável.
+- `cd_renavam_vm`: RENAVAM do veículo (deve constar na base base/frotas).
 
-### ✅ Diretrizes Práticas de Correção
-1. Certifique-se de que a carga dos arquivos orçamentários básicos foi transmitida e aprovada **antes** dos módulos subsidiários.
-2. Confira se a data da versão do orçamento informada bate exatamente com a remessa oficial.
+### ✅ Como Corrigir
+1. Garanta que a carga dos arquivos orçamentários básicos (.BAS) foi transmitida e validada **antes** dos arquivos de veículos.
+2. Confira se o RENAVAM informado na destinação realmente existe no cadastro geral da frota.
+""",
+        "confianca": "Alta"
+    },
+    {
+        "chaves": ["patrimônio", ".pat", "contas redutoras", "bens_municipios", "nu_registro_bem"],
+        "titulo": "Patrimônio e Bens: Contras Redutoras e Vínculo de Bens (.PAT)",
+        "resposta": """### 🎯 Causa Raiz
+O arquivo de contas redutoras ou depreciação tenta referenciar um número de registro de bem (`nu_registro_bem`) que ainda não foi cadastrado ou cujos dados do município/órgão divergem da base principal.
+
+### 📍 Campos Envolvidos
+- `cd_municipio`: Código do município.
+- `nu_registro_bem`: Identificador único do bem patrimonial.
+
+### ✅ Como Corrigir
+1. Transmita primeiro o arquivo principal de cadastro de bens do patrimônio.
+2. Valide se o número de registro do bem no arquivo de contas redutoras coincide exatamente com a base patrimonial oficial.
+""",
+        "confianca": "Alta"
+    },
+    {
+        "chaves": ["contrato", ".lco", ".dcd", "cpf_responsavel", "licitacao"],
+        "titulo": "Contratos e Aditivos: Vínculo com Licitações e Responsáveis (.LCO / .DCD)",
+        "resposta": """### 🎯 Causa Raiz
+Inconsistência na chave de relacionamento entre o contrato/aditivo e o processo licitatório de origem, ou ausência de regularidade no cadastro do CPF do responsável pela assinatura.
+
+### 📍 Campos Envolvidos
+- `nu_licitacao` / `tp_modalidade`: Chave da licitação de origem.
+- `cpf_responsavel`: CPF do gestor ou ordenador de despesa.
+
+### ✅ Como Corrigir
+1. Certifique-se de que a licitação geradora do contrato foi enviada e validada sem erros no módulo correspondente.
+2. Verifique se o CPF do responsável possui status ativo e regular na base de servidores/gestores.
 """,
         "confianca": "Alta"
     }
@@ -535,10 +568,13 @@ with aba3:
                 st.markdown(item['resposta'])
 
 # ------------------------------------------
-# ABA 4: BASE DE REGRAS
+# ABA 4: BASE DE REGRAS (EXPANDIDA)
 # ------------------------------------------
 with aba4:
-    st.markdown("##### Base de Regras Mapeadas do SIM TCE-CE")
+    st.markdown("##### 📖 Base de Regras Oficiais Mapeadas do SIM TCE-CE")
+    st.caption("Consulte abaixo as diretrizes técnicas e causas raízes recorrentes para os principais módulos do sistema.")
+    st.markdown("---")
+    
     for reg in BASE_CONHECIMENTO_PADRAO:
         with st.expander(f"📌 {reg['titulo']}"):
             st.markdown(reg['resposta'])
