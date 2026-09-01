@@ -222,37 +222,23 @@ with aba2:
 
     if passo == 1:
         st.markdown("##### 1. Configurar Parâmetros e Enviar Arquivo Local")
-        st.caption("Selecione o arquivo local. O sistema detectará a extensão e sugerirá o endpoint correto da API.")
+        st.caption("Selecione o arquivo local e o endpoint real da API de Dados Abertos do TCE-CE.")
         
         arquivo_auditoria = st.file_uploader("Selecione o arquivo local (.VCL, .LCO, .BAS, .PAT, etc.)", type=["lco", "bas", "vcl", "pat", "txt", "csv"])
         
-        # Sugestão automática de endpoint com base na extensão do arquivo enviado
-        sugestao_endpoint = "licitacoes"
-        if arquivo_auditoria:
-            nome_ext = arquivo_auditoria.name.split('.')[-1].lower()
-            if nome_ext == "vcl":
-                sugestao_endpoint = "veiculos"  # Endpoint correto para frotas/veículos
-            elif nome_ext == "lco":
-                sugestao_endpoint = "contratos"
-            elif nome_ext == "pat":
-                sugestao_endpoint = "patrimonio"
-            elif nome_ext == "bas":
-                sugestao_endpoint = "unidades_orcamentarias"
-
         col_c1, col_c2 = st.columns(2)
         with col_c1:
             endpoint_metodo = st.selectbox(
-                "Recurso / Endpoint da API do TCE-CE", 
-                ["veiculos", "licitacoes", "contratos", "patrimonio", "unidades_orcamentarias", "despesas", "receitas"],
-                index=["veiculos", "licitacoes", "contratos", "patrimonio", "unidades_orcamentarias", "despesas", "receitas"].index(sugestao_endpoint) if sugestao_endpoint in ["veiculos", "licitacoes", "contratos", "patrimonio", "unidades_orcamentarias", "despesas", "receitas"] else 0
+                "Recurso / Endpoint Oficial da API", 
+                ["veiculos", "licitacoes", "contratos", "patrimonio", "unidades_orcamentarias", "despesas", "receitas"]
             )
         with col_c2:
             exercicio_api = st.selectbox("Exercício (Ano)", ["2026", "2025", "2024"], index=0)
 
-        codigo_municipio = st.text_input("Código do Município (Opcional - ex: 123)", placeholder="")
+        codigo_municipio = st.text_input("Código do Município (Obrigatório em alguns endpoints)", placeholder="Ex: 123 ou deixe vazio")
         linhas_locais_input = st.text_area("Linhas Específicas / Relatório do Validador", placeholder="Ex: 7, 8, 9, 10 ou deixe em branco para varredura geral")
         
-        if st.button("Processar Arquivo e Consultar API do TCE-CE →", type="primary"):
+        if st.button("Consultar API Real do TCE-CE →", type="primary"):
             if not arquivo_auditoria:
                 st.error("Por favor, envie um arquivo local.")
             else:
@@ -265,7 +251,7 @@ with aba2:
                 st.rerun()
 
     elif passo == 2:
-        st.markdown("##### 2. Consultando API do TCE-CE...")
+        st.markdown("##### 2. Consultando API Real do TCE-CE...")
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         linhas_arquivo = arq_obj.getvalue().decode("latin1").splitlines() if arq_obj else []
 
@@ -278,17 +264,17 @@ with aba2:
 
         with st.spinner(f"Conectando a {url_base_api}..."):
             try:
-                resposta = requests.get(url_base_api, params=params, timeout=10)
+                resposta = requests.get(url_base_api, params=params, timeout=15)
                 if resposta.status_code == 200:
-                    dados_api = resposta.json()
-                    st.session_state["dados_api_retorno"] = dados_api if isinstance(dados_api, list) else [dados_api]
+                    dados_brutos = resposta.json()
+                    st.session_state["dados_api_retorno"] = dados_brutos if isinstance(dados_brutos, list) else [dados_brutos]
                 else:
                     st.session_state["dados_api_retorno"] = []
             except:
                 st.session_state["dados_api_retorno"] = []
 
         st.session_state["linhas_arquivo_local"] = linhas_arquivo
-        st.success("Processamento concluído!")
+        st.success("Consulta executada com dados reais da API!")
         
         col_b1, col_b2 = st.columns([1, 4])
         with col_b1:
@@ -296,19 +282,19 @@ with aba2:
                 st.session_state["etapa_auditoria"] = 1
                 st.rerun()
         with col_b2:
-            if st.button("Gerar Relatório de Divergências", type="primary"):
+            if st.button("Gerar Relatório de Cruzamento Real", type="primary"):
                 st.session_state["etapa_auditoria"] = 3
                 st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório de Divergências: Cruzamento com a API")
+        st.markdown("##### 3. Relatório de Divergências: Cruzamento Real com a API do TCE-CE")
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         nome_arq = arq_obj.name if arq_obj else "Arquivo"
         linhas_locais = st.session_state.get("linhas_arquivo_local", [])
         relatorio_input = st.session_state.get("linhas_locais_input", "")
         dados_api = st.session_state.get("dados_api_retorno", [])
         
-        st.info(f"📁 **Arquivo:** `{nome_arq}` | 🌐 **Registros retornados pela API:** {len(dados_api)}")
+        st.info(f"📁 **Arquivo Analisado:** `{nome_arq}` ({len(linhas_locais)} linhas totais lidas) | 🌐 **Registros na API:** {len(dados_api)}")
 
         linhas_para_exibir = [int(m) for m in re.findall(r'(\d+)', relatorio_input)] if relatorio_input else []
         alvos = linhas_para_exibir if linhas_para_exibir else list(range(1, min(len(linhas_locais) + 1, 51)))
@@ -321,22 +307,22 @@ with aba2:
                 
                 encontrou = any(campo.lower() in str(dados_api).lower() for campo in campos_linha if len(campo) > 2) if dados_api else False
 
-                if dados_api and not encontrou:
-                    status_val = "❌ Divergente: Não localizado na base da API"
-                    acao_val = "Verificar se o registro foi transmitido corretamente."
-                elif not dados_api:
-                    status_val = "⚠️ Sem dados na API para este endpoint/filtro"
-                    acao_val = "Confirme se o endpoint selecionado no Passo 1 corresponde à frota/módulo correto."
-                else:
-                    status_val = "✅ Compatível com os dados da API"
+                if dados_api and encontrou:
+                    status_val = "✅ Compatível com os dados reais da API"
                     acao_val = "Nenhuma ação necessária."
+                elif dados_api and not encontrou:
+                    status_val = "❌ Divergente / Não localizado na API"
+                    acao_val = "Verificar parâmetros ou se o registro foi transmitido."
+                else:
+                    status_val = "⚠️ API Indisponível / Sem Retorno para Cruzamento"
+                    acao_val = "Validar credenciais ou parâmetros obrigatórios (ex: Município)."
 
                 dados_dinamicos.append({
                     "Linha": num_linha,
-                    "Arquivo": nome_arq,
-                    "Conteúdo": conteudo_linha[:50] + "..." if len(conteudo_linha) > 50 else conteudo_linha,
-                    "Status": status_val,
-                    "Ação": acao_val
+                    "Arquivo / Módulo": nome_arq,
+                    "Conteúdo Analisado": conteudo_linha[:50] + "..." if len(conteudo_linha) > 50 else conteudo_linha,
+                    "Status do Cruzamento (API)": status_val,
+                    "Ação Recomendada": acao_val
                 })
 
         if dados_dinamicos:
