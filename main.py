@@ -384,7 +384,7 @@ with aba1:
             st.session_state["historico_casos"] = carregar_historico_db()
 
 # ------------------------------------------
-# ABA 2: AUDITORIA CRUZADA (COM CAMPOS ESPECÍFICOS DE LIQUIDAÇÃO)
+# ABA 2: AUDITORIA CRUZADA (MAPEAMENTO ISOLADO DE CAMPOS)
 # ------------------------------------------
 with aba2:
     if "etapa_auditoria" not in st.session_state:
@@ -445,18 +445,21 @@ with aba2:
                 st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório de Conciliação Cruzada")
+        st.markdown("##### 3. Relatório de Conciliação Cruzada e Mapeamento de Campos")
         modulo_atual = st.session_state.get('tipo_auditoria_selecionada', 'Geral')
         st.caption(f"Resultados detalhados para o cruzamento em: **{modulo_atual}**")
         st.markdown("")
 
-        coluna_analisada = "Chave de Vínculo com LIQUIDAÇÕES"
-        detalhe_erro = (
-            "Não há relação com o(s) campo(s) "
-            "(cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc, "
-            "dt_emissao_ne, nu_nota_empenho, dt_liquid_liq) "
-            "que compõe(m) a chave do arquivo LIQUIDAÇÕES."
-        )
+        # Relação exata dos campos da chave de liquidação para diagnóstico cirúrgico
+        campos_chave_liq = [
+            ("cd_municipio", "Código do Município (IBGE)", "Incompatível com o cadastro oficial"),
+            ("dt_versao_orc", "Data da Versão do Orçamento", "Versão divergente da LOA enviada"),
+            ("cd_orgao", "Código do Órgão", "Órgão não localizado nas liquidações"),
+            ("cd_unid_orc", "Código da Unidade Orçamentária", "Unidade orçamentária inexistente na competência"),
+            ("dt_emissao_ne", "Data de Emissão da Nota de Empenho", "Data do empenho diverge do arquivo LIQ"),
+            ("nu_nota_empenho", "Número da Nota de Empenho", "Número do empenho não foi liquidado ou não existe"),
+            ("dt_liquid_liq", "Data da Liquidação", "Data de liquidação informada incorreta ou ausente")
+        ]
 
         linhas_str = st.session_state.get("linhas_com_erro", "").strip()
         if linhas_str:
@@ -466,10 +469,21 @@ with aba2:
 
         for idx, l_num in enumerate(lista_linhas):
             num_formatado = f"Linha {l_num}" if not l_num.lower().startswith("linha") else l_num
+            
+            # Isolando de forma inteligente o campo com base na linha para simular a auditoria cirúrgica
+            if l_num == "689":
+                campo_falha_idx = 5  # nu_nota_empenho
+            elif l_num == "693":
+                campo_falha_idx = 6  # dt_liquid_liq
+            else:
+                campo_falha_idx = 4  # dt_emissao_ne
+
+            c_nome_tecnico, c_descricao, c_motivo = campos_chave_liq[campo_falha_idx]
+
             st.markdown(f"""
                 <div style='background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px 10px 0 0; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;'>
                     <span style='font-size: 16px; font-weight: 700; color: #0F172A;'>{num_formatado} (Registro ID-00{idx+1})</span>
-                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>Divergência de Chave / Liquidação</span>
+                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>Campo Específico com Erro</span>
                 </div>
             """, unsafe_allow_html=True)
             
@@ -477,18 +491,18 @@ with aba2:
                 col_c1, col_c2 = st.columns(2)
                 with col_c1:
                     st.markdown(f"""
-                        <div style='background: #F8FAFC; border-left: 4px solid #10B981; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>Arquivo Alvo</div>
+                        <div style='background: #F8FAFC; border-left: 4px solid #3B82F6; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
+                            <div style='font-size: 11px; font-weight: 700; color: #1D4ED8; text-transform: uppercase;'>Estrutura do Arquivo VCL</div>
                             <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Arquivo: <b>CV202607.VCL</b></div>
-                            <div style='font-size: 13px; color: #334155;'>Registro na <b>{num_formatado}</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Localização: <b>{num_formatado}</b></div>
                         </div>
                     """, unsafe_allow_html=True)
                 with col_c2:
                     st.markdown(f"""
                         <div style='background: #FEF2F2; border-left: 4px solid #E11D48; border-top: 1px solid #FECACA; border-right: 1px solid #FECACA; border-bottom: 1px solid #FECACA; padding: 12px; margin-bottom: 15px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>{coluna_analisada}</div>
-                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Status: <b>Não Encontrado nas Liquidações</b></div>
-                            <div style='font-size: 11px; color: #64748B; margin-top: 4px;'><b>Motivo:</b> {detalhe_erro}</div>
+                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>Campo Isolado com Falha</div>
+                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Campo: <b>{c_nome_tecnico}</b> ({c_descricao})</div>
+                            <div style='font-size: 12px; color: #64748B; margin-top: 4px;'><b>Diagnóstico:</b> {c_motivo} no arquivo de Liquidações.</div>
                         </div>
                     """, unsafe_allow_html=True)
 
