@@ -414,7 +414,7 @@ with aba1:
             st.info(resp or "Nenhuma resposta gerada.")
 
 # ------------------------------------------
-# ABA 2: AUDITORIA CRUZADA
+# ABA 2: AUDITORIA CRUZADA (FORMATO ORIGINAL DE PASSOS)
 # ------------------------------------------
 with aba2:
     if "etapa_auditoria" not in st.session_state:
@@ -548,18 +548,26 @@ with aba4:
             st.markdown(reg['resposta'])
 
 # ------------------------------------------
-# ABA 5: CARGA COMPLETA & FLUXOGRAMA (COM TODAS AS MELHORIAS RESTAURADAS)
+# ABA 5: CARGA COMPLETA & FLUXOGRAMA (COM BOTÃO DE LIMPEZA E TODAS AS MELHORIAS)
 # ------------------------------------------
 with aba5:
     st.markdown("##### Assistente de Carga Completa do Mês (Validação de Integridade)")
     st.caption("Envie todos os arquivos da competência de uma só vez. O motor analisará as extensões, validará competências, tamanhos, dependências (incluindo Licitações) e gerará o fluxograma relacional.")
 
+    if "limpar_arquivos" not in st.session_state:
+        st.session_state["limpar_arquivos"] = False
+
     col_up1, col_up2 = st.columns(2)
     with col_up1:
+        if st.session_state["limpar_arquivos"]:
+            st.session_state["limpar_arquivos"] = False
+            st.rerun()
+
         arquivos_lote = st.file_uploader(
             "Selecione todos os arquivos do período (.BAS, .LIC, .LCO, .VCL, .PAT, .CPF, .DCD)", 
             type=["bas", "lic", "lco", "vcl", "pat", "cpf", "dcd", "txt", "dat"], 
-            accept_multiple_files=True
+            accept_multiple_files=True,
+            key="uploader_lote_arquivos"
         )
     with col_up2:
         st.markdown("""
@@ -569,6 +577,11 @@ with aba5:
         * Verificação rigorosa do limite de tamanho suportado pelo TCE-CE.
         * Licitações (`.LIC`) como pré-requisito obrigatório para Contratos (`.LCO`).
         """)
+
+        if arquivos_lote:
+            if st.button("🗑️ Limpar Lote e Enviar Outros", use_container_width=True):
+                st.session_state["limpar_arquivos"] = True
+                st.rerun()
 
     if arquivos_lote:
         extensoes_enviadas = set()
@@ -582,11 +595,9 @@ with aba5:
             extensoes_enviadas.add(ext)
             tamanho_kb = round(f.size / 1024, 2)
             
-            # Limite fictício razoável para validação do TCE-CE (ex: 15000 KB / 15MB)
             limite_aceitavel = 15000.0 
             status_tamanho = "OK (Dentro do Limite)" if tamanho_kb <= limite_aceitavel else "Alerta: Arquivo muito pesado"
 
-            # Tentativa simples de extrair ano e mês do nome do arquivo se houver padrão (ex: 2026, 01/12)
             match_ano = re.search(r'(20\d{2})', nome_arq)
             if match_ano:
                 anos_detectados.add(match_ano.group(1))
@@ -610,13 +621,13 @@ with aba5:
         # Validação de Conteúdo (Competência)
         st.markdown("#### 🔍 Validação de Consistência da Competência")
         if len(anos_detectados) > 1 or len(meses_detectados) > 1:
-            st.warning(f"⚠️ **Inconsistência de Competência Detectada:** Foram encontrados múltiplos anos ({list(anos_detectados)}) ou meses ({list(meses_detectados)}) nos nomes dos arquivos do lote. Certifique-se de que todos pertencem estritamente à mesma competência.")
+            st.warning(f"⚠️ **Inconsistência de Competência Detectada:** Foram encontrados múltiplos anos ({list(anos_detectados)}) ou meses ({list(meses_detectados)}) nos nomes dos arquivos do lote.")
         else:
             ano_str = list(anos_detectados)[0] if anos_detectados else "Não identificado"
             mes_str = list(meses_detectados)[0] if meses_detectados else "Não identificado"
             st.success(f"✨ Competência consistente detectada nos arquivos: **Ano: {ano_str} | Mês: {mes_str}**")
 
-        # Validação estrita das dependências atualizadas (Incluindo .LIC para .LCO)
+        # Validação estrita das dependências atualizadas
         tem_bas = "bas" in extensoes_enviadas or "dat" in extensoes_enviadas or "txt" in extensoes_enviadas
         tem_lic = "lic" in extensoes_enviadas
         tem_lco = "lco" in extensoes_enviadas or "ctr" in extensoes_enviadas
@@ -663,7 +674,6 @@ with aba5:
 
         st.markdown(f"```mermaid\n{codigo_mermaid}\n```", unsafe_allow_html=True)
 
-        # Simulação de Erro Oficial do TCE-CE caso faltem itens essenciais
         if not tem_bas or not tem_lic:
             st.markdown("---")
             st.error("🚨 **SIMULADOR DE ERRO OFICIAL DO VALIDADOR TCE-CE (REJEIÇÃO EM CADEIA)**")
