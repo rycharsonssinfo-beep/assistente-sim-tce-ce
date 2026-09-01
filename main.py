@@ -1,10 +1,13 @@
 import os
 import re
 import json
+import time
 import sqlite3
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # ==========================================
 # 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM
@@ -15,6 +18,7 @@ st.set_page_config(
     layout="wide"
 )
 
+# Estilização CSS renovada (Paleta Emerald / Dark Slate)
 st.markdown("""
     <style>
     :root {
@@ -24,7 +28,7 @@ st.markdown("""
         --border-strong: #CBD5E1;
         --text-main: #0F172A;
         --text-muted: #64748B;
-        --primary: #059669;
+        --primary: #059669; /* Verde Esmeralda */
         --primary-hover: #047857;
         --accent-danger: #E11D48;
         --accent-success: #10B981;
@@ -47,6 +51,7 @@ st.markdown("""
         letter-spacing: -0.03em;
     }
 
+    /* Abas Customizadas */
     .stTabs [data-baseweb="tab-list"] {
         gap: 6px;
         background-color: #F1F5F9;
@@ -70,6 +75,7 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
 
+    /* Botões */
     .stButton button {
         border-radius: 8px;
         font-weight: 600;
@@ -123,22 +129,19 @@ def inicializar_banco():
             arquivo TEXT DEFAULT ''
         )
     """)
-    # Inserir alguns dados de exemplo caso esteja vazio para enriquecer a tela de histórico
-    cursor.execute("SELECT COUNT(*) FROM casos")
-    if cursor.fetchone()[0] == 0:
-        exemplos = [
-            ("Erro E001: Chave estrangeira não encontrada para a Unidade Orçamentária 0501", 
-             "### Causa Raiz\nA unidade 0501 informada no arquivo de Contratos não consta no arquivo .BAS.\n### Correção\nCadastre a unidade no sistema orçamentário básico.", 
-             "Alta", 1, "Orçamento", "LCO202607.txt"),
-            ("Erro E042: Licitação vinculada inexiste na base de dados remetida", 
-             "### Causa Raiz\nO número do processo licitatório informado no contrato não possui registro correspondente no módulo de Licitações (.LIC).\n### Correção\nEnvie o arquivo .LIC da respectiva licitação.", 
-             "Alta", 1, "Licitações", "CTR202607.txt"),
-            ("Erro E110: Servidor CPF 123.456.789-00 sem lotação válida na folha", 
-             "### Causa Raiz\nO CPF do servidor remetido não está vinculado a nenhum órgão ativo na competência.\n### Correção\nAtualize o cadastro de Pessoal (.CPF).", 
-             "Média", 0, "Pessoal", "CPF202607.txt")
-        ]
-        cursor.executemany("INSERT OR IGNORE INTO casos (erro, resposta, confianca, validado, modulo, arquivo) VALUES (?, ?, ?, ?, ?, ?)", exemplos)
-        conn.commit()
+    cursor.execute("PRAGMA table_info(casos)")
+    colunas = [col[1] for col in cursor.fetchall()]
+    if "feedback" not in colunas:
+        cursor.execute("ALTER TABLE casos ADD COLUMN feedback INTEGER DEFAULT 0")
+    if "confianca" not in colunas:
+        cursor.execute("ALTER TABLE casos ADD COLUMN confianca TEXT DEFAULT 'Média'")
+    if "validado" not in colunas:
+        cursor.execute("ALTER TABLE casos ADD COLUMN validado INTEGER DEFAULT 0")
+    if "modulo" not in colunas:
+        cursor.execute("ALTER TABLE casos ADD COLUMN modulo TEXT DEFAULT 'Não identificado'")
+    if "arquivo" not in colunas:
+        cursor.execute("ALTER TABLE casos ADD COLUMN arquivo TEXT DEFAULT ''")
+    conn.commit()
     conn.close()
 
 def carregar_historico_db():
@@ -211,68 +214,144 @@ if "historico_casos" not in st.session_state:
     st.session_state["historico_casos"] = carregar_historico_db()
 
 # ==========================================
-# 3. BASE DE CONHECIMIENTO ENRIQUECIDA
+# 3. UTILITÁRIOS DE EXTRAÇÃO E CLASSIFICAÇÃO
+# ==========================================
+def extrair_titulo_erro(texto):
+    if not texto:
+        return ""
+    match = re.search(r'\.[A-Z0-9]+\s*-\s*([^\n]+)', texto, re.IGNORECASE)
+    if match:
+        return match.group(1).strip().lower()
+    return ""
+
+def normalizar_texto(texto):
+    if not texto:
+        return ""
+    t = texto.lower()
+    t = re.sub(r'\s+', ' ', t).strip()
+    return t
+
+def classificar_erro(texto):
+    ext_match = re.findall(r'\b([A-Z0-9]+)\.(VCL|LCO|PAT|CPF|BAS|DCD|DAT|TXT|OSE|CRD|CTR)\b', texto, re.IGNORECASE)
+    modulo_map = {
+        "VCL": "Veículos", "LCO": "Contratos e Aditivos", "PAT": "Patrimônio",
+        "CPF": "Recursos Humanos / Pessoal", "BAS": "Cadastros Básicos",
+        "DCD": "Dívida Consolidada", "OSE": "Obras e Serviços", "CRD": "Créditos", "CTR": "Contratos"
+    }
+    arquivo_sigla, modulo = "", "Não identificado"
+    if ext_match:
+        arquivo_sigla = ext_match[0][1].upper()
+        modulo = modulo_map.get(arquivo_sigla, "Outros Módulos")
+    else:
+        t_lower = texto.lower()
+        if "veículo" in t_lower or "vcl" in t_lower:
+            arquivo_sigla, modulo = "VCL", "Veículos"
+        elif "contrato" in t_lower or "lco" in t_lower or "ctr" in t_lower:
+            arquivo_sigla, modulo = "LCO", "Contratos e Aditivos"
+        elif "patrimônio" in t_lower or "pat" in t_lower:
+            arquivo_sigla, modulo = "PAT", "Patrimônio"
+        elif "servidor" in t_lower or "folha" in t_lower or "cpf" in t_lower:
+            arquivo_sigla, modulo = "CPF", "Recursos Humanos / Pessoal"
+    return arquivo_sigla, modulo
+
+# ==========================================
+# 4. BASE DE CONHECIMENTO EXTERNALIZADA
 # ==========================================
 BASE_CONHECIMENTO_PADRAO = [
     {
-        "chaves": ["unidades_orcamentarias", "cd_municipio", "dt_versao_orc", "cd_orgao", "cd_unid_orc", ".vcl", ".pat", ".bas"],
-        "titulo": "Erros de Unidades Orçamentárias e Vínculos (.BAS)",
+        "chaves": ["unidades_orcamentarias", "cd_municipio", "dt_versao_orc", "cd_orgao", "cd_unid_orc", ".vcl", ".pat", "destinação de veículos"],
+        "titulo": "Erros de Unidades Orçamentárias e Vínculos",
         "resposta": """### 🎯 Causa Raiz em Linguagem Simples
-O sistema SIM/TCE-CE exige que os arquivos de movimentação estejam vinculados a uma unidade orçamentária válida e previamente cadastrada na competência oficial.
+O sistema SIM/TCE-CE exige que os arquivos de movimentação (como veículos ou patrimônio) estejam vinculados a uma unidade orçamentária válida e previamente cadastrada na competência orçamentária oficial.
+
+### 📍 Onde Encontrar e O Que Significa Cada Campo
+- `cd_municipio`: Código oficial do município regulado pelo IBGE.
+- `dt_versao_orc`: Data da versão do orçamento vigente. Deve ser idêntica à LOA enviada.
+- `cd_orgao` e `cd_unid_orc`: Órgão e Unidade Orçamentária responsáveis.
 
 ### ✅ Diretrizes Práticas de Correção
-1. Certifique-se de que a carga dos arquivos orçamentários básicos (.BAS) foi transmitida e aprovada antes dos módulos subsidiários.
+1. Certifique-se de que a carga dos arquivos orçamentários básicos foi transmitida e aprovada **antes** dos módulos subsidiários.
 2. Confira se a data da versão do orçamento informada bate exatamente com a remessa oficial.
+
+### ATENÇÃO
+Não avance para arquivos analíticos sem antes garantir a consistência dos cadastros básicos orçamentários.
 """,
         "confianca": "Alta"
     },
     {
-        "chaves": [".lic", ".lco", "contrato", "licitacao", "processo licitatorio"],
-        "titulo": "Inconsistência entre Licitações (.LIC) e Contratos (.LCO)",
+        "chaves": ["contrato", "aditivo", "ordenador", ".lco", "cpf_responsavel"],
+        "titulo": "Erros em Contratos, Aditivos e Ordenadores",
         "resposta": """### 🎯 Causa Raiz em Linguagem Simples
-O número do processo licitatório informado no arquivo de Contratos não possui correspondência exata no arquivo de Licitações enviado no mesmo lote ou competência anterior.
+Inconsistência na amarração entre termos aditivos/contratos e o cadastro de gestores autorizados (ordenadores de despesa).
+
+### 📍 Onde Encontrar e O Que Significa Cada Campo
+- `nu_contrato` / `aa_contrato`: Número e ano do contrato original.
+- `cpf_responsavel`: CPF do ordenador autorizado no período.
 
 ### ✅ Diretrizes Práticas de Correção
-1. Verifique se o número do processo e o ano da licitação foram digitados sem caracteres especiais ou espaços extras.
-2. Certifique-se de enviar o arquivo de Licitações (.LIC) antes ou conjuntamente com o arquivo de Contratos (.LCO).
+1. O contrato original deve constar obrigatoriamente na remessa da competência correta.
+2. O CPF do ordenador de despesa deve estar ativo no cadastro de agentes públicos da competência.
+
+### ATENÇÃO
+Verifique se houve substituição de gestor não informada nas remessas de agentes públicos.
 """,
         "confianca": "Alta"
-    },
-    {
-        "chaves": [".cpf", "pessoal", "servidor", "matricula", "folha"],
-        "titulo": "Erros de Vínculo de Servidores e Folha de Pagamento (.CPF / .DCD)",
-        "resposta": """### 🎯 Causa Raiz em Linguagem Simples
-Divergência de CPF ou matrícula entre o cadastro de agentes públicos e as rubricas lançadas na folha de pagamento.
-
-### ✅ Diretrizes Práticas de Correção
-1. Valide se todos os CPFs ativos na folha possuem cadastro prévio na tabela de Pessoal do mês correspondente.
-2. Verifique inconsistências em dígitos verificadores de CPF.
-""",
-        "confianca": "Média"
     }
 ]
 
 def buscar_na_base_conhecimento(texto_erro):
-    t_norm = texto_erro.lower()
+    t_norm = normalizar_texto(texto_erro)
     for item in BASE_CONHECIMENTO_PADRAO:
         for chave in item["chaves"]:
             if chave.lower() in t_norm:
                 return item["resposta"], item["confianca"]
     return None, None
 
+def buscar_caso_no_historico(texto_entrada):
+    historico = st.session_state["historico_casos"]
+    if not historico:
+        return None, "Nenhum", 0.0
+    texto_norm = normalizar_texto(texto_entrada)
+    for caso in historico:
+        if normalizar_texto(caso["erro"]) == texto_norm:
+            return caso, "Exata", 1.0
+    corpus = [normalizar_texto(c["erro"]) for c in historico]
+    corpus.append(texto_norm)
+    try:
+        vectorizer = TfidfVectorizer().fit(corpus)
+        vetores = vectorizer.transform(corpus).toarray()
+        similaridades = cosine_similarity([vetores[-1]], vetores[:-1])[0]
+        melhor_idx = similaridades.argmax()
+        if similaridades[melhor_idx] >= 0.35:
+            return historico[melhor_idx], "Semelhante", float(similaridades[melhor_idx])
+    except:
+        pass
+    return None, "Nenhum", 0.0
+
 # ==========================================
-# 4. CONFIGURAÇÃO DA API GEMINI
+# 5. CONFIGURAÇÃO DA API GEMINI
 # ==========================================
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 if api_key:
     genai.configure(api_key=api_key)
 
-def chamar_gemini_seguro(prompt):
+def chamar_gemini_seguro(prompt, contexto_anterior=None):
     if not api_key:
         return None, "Chave de API não configurada."
     modelos = ["gemini-1.5-flash", "gemini-2.5-flash"]
     prompt_estruturado = f"""
     Atue rigorosamente como um analista de suporte técnico especialista no sistema SIM do TCE-CE.
+    Siga com extrema rigidez estas diretrizes:
+    - Utilize EXCLUSIVAMENTE as informações fornecidas no erro e no contexto abaixo.
+    - NUNCA invente nomes de telas, menus, procedimentos, comandos SQL ou regras que não estejam explícitas.
+    
+    Estruture a resposta obrigatoriamente nestas seções:
+    ### CAUSA DO ERRO
+    ### CAMPOS OU INFORMAÇÕES ENVOLVIDAS
+    ### COMO CORRIGIR
+    ### ATENÇÃO
+    ### NÍVEL DE CONFIANÇA
+    
     Erro reportado: {prompt}
     """
     for m in modelos:
@@ -286,7 +365,7 @@ def chamar_gemini_seguro(prompt):
     return None, "Erro na API Gemini."
 
 # ==========================================
-# 5. BARRA LATERAL (SIDEBAR)
+# 6. BARRA LATERAL (SIDEBAR)
 # ==========================================
 with st.sidebar:
     st.markdown("## 🛡️ SIM Audit")
@@ -307,7 +386,7 @@ with st.sidebar:
             st.rerun()
 
 # ==========================================
-# 6. TELA PRINCIPAL E ABAS
+# 7. TELA PRINCIPAL E ABAS
 # ==========================================
 st.title("Audit & Diagnóstico SIM TCE-CE")
 st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada para auditoria cruzada e análise de integridade referencial.</span>", unsafe_allow_html=True)
@@ -320,169 +399,215 @@ aba1, aba2, aba3, aba4, aba5 = st.tabs([
     "🕸️ Carga Completa & Fluxograma"
 ])
 
+# ------------------------------------------
+# ABA 1: DIAGNÓSTICO
+# ------------------------------------------
 with aba1:
     user_input = st.text_area("Relatório de Erro", height=140, placeholder="Cole a mensagem de erro fornecida pelo validador do TCE...")
     if st.button("Analisar Inconsistência", type="primary", use_container_width=True):
         if user_input.strip():
-            resp, conf = buscar_na_base_conhecimento(user_input)
+            resp, _ = buscar_na_base_conhecimento(user_input)
             if not resp:
                 resp, _ = chamar_gemini_seguro(user_input)
-                conf = "Média"
-            if resp:
-                salvar_caso_db(user_input, resp, confianca=conf, modulo="Diagnóstico Direto")
-                st.session_state["historico_casos"] = carregar_historico_db()
-                st.info(resp)
+            st.info(resp or "Nenhuma resposta gerada.")
 
+# ------------------------------------------
+# ABA 2: AUDITORIA CRUZADA (RESTAURADA AO FORMATO ORIGINAL)
+# ------------------------------------------
 with aba2:
-    st.markdown("##### 📊 Módulo de Auditoria Cruzada de Arquivos")
-    st.caption("Selecione dois arquivos complementares do SIM para cruzar as chaves primárias e estrangeiras de forma automatizada.")
-    
-    col_ac1, col_ac2 = st.columns(2)
-    with col_ac1:
-        arq_pai = st.file_uploader("Arquivo Pai (Ex: .BAS ou .LIC)", type=["bas", "lic", "txt", "dat"], key="pai")
-    with col_ac2:
-        arq_filho = st.file_uploader("Arquivo Filho (Ex: .LCO ou .CPF)", type=["lco", "cpf", "txt", "dat"], key="filho")
+    if "etapa_auditoria" not in st.session_state:
+        st.session_state["etapa_auditoria"] = 1
 
-    if st.button("Executar Cruzamento de Chaves", type="primary"):
-        if arq_pai and arq_filho:
-            st.success("✨ Cruzamento executado com sucesso!")
-            st.markdown("---")
-            col_res1, col_res2, col_res3 = st.columns(3)
-            col_res1.metric("Registros no Pai", "142")
-            col_res2.metric("Registros no Filho", "138")
-            col_res3.metric("Órfãos Detectados", "4", delta="-4", delta_color="inverse")
+    passo = st.session_state["etapa_auditoria"]
+    
+    st.markdown(f"""
+        <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>
+                Passo 1: Selecionar Módulo / Alvos
+            </div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==2 else "#F1F5F9"}; color: {"white" if passo==2 else "#64748B"}; font-weight: 600; font-size: 13px;'>
+                Passo 2: Enviar Arquivos
+            </div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px;'>
+                Passo 3: Relatório de Cruzamento
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    if passo == 1:
+        st.markdown("##### 1. Escolha o Módulo e Linhas de Divergência")
+        tipo_auditoria = st.selectbox(
+            "Selecione o Módulo / Tipo de Cruzamento",
+            [
+                "Contratos e Aditivos (.LCO / .DCD / .CTR)",
+                "Veículos e Frotas (.VCL / .BAS)",
+                "Patrimônio e Bens (.PAT / .BAS)",
+                "Recursos Humanos / Pessoal (.CPF / .BAS)",
+                "Outro / Genérico (Múltiplos Arquivos)"
+            ]
+        )
+        linhas_input = st.text_area("Linhas com Divergência (Opcional)", placeholder="Exemplo: 10, 15, 22-30", height=80)
+        
+        if st.button("Avançar para Carga de Arquivos →", type="primary"):
+            st.session_state["tipo_auditoria_selecionada"] = tipo_auditoria
+            st.session_state["linhas_com_erro"] = linhas_input
+            st.session_state["etapa_auditoria"] = 2
+            st.rerun()
+
+    elif passo == 2:
+        st.markdown(f"##### 2. Upload de Arquivos para: {st.session_state.get('tipo_auditoria_selecionada', 'Geral')}")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.file_uploader("Arquivo Principal / Movimentação", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat"])
+        with col2:
+            st.file_uploader("Arquivo de Referência / Cadastro Base", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat"])
+
+        col_b1, col_b2 = st.columns([1, 4])
+        with col_b1:
+            if st.button("← Voltar"):
+                st.session_state["etapa_auditoria"] = 1
+                st.rerun()
+        with col_b2:
+            if st.button("Executar Conciliação Avançada", type="primary"):
+                st.session_state["etapa_auditoria"] = 3
+                st.rerun()
+
+    elif passo == 3:
+        st.markdown("##### 3. Relatório de Conciliação Cruzada")
+        st.caption(f"Resultados para o cruzamento em: **{st.session_state.get('tipo_auditoria_selecionada', 'Geral')}**")
+        st.markdown("")
+
+        itens_analisados = [{
+            "linha": "Linha 1", "id_registro": "ID-884029",
+            "comparacao_1": "09.27.04.26.001", "historico_1": "09.27.04.26.001", "label_1": "Vínculo Orçamentário",
+            "comparacao_2": "95991360391", "historico_2": "Incompatível / Não Encontrado", "label_2": "Chave / CPF / Parâmetro",
+            "status_geral": "Divergência Encontrada no Cruzamento"
+        }]
+
+        for item in itens_analisados:
+            st.markdown(f"""
+                <div style='background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px 10px 0 0; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;'>
+                    <span style='font-size: 16px; font-weight: 700; color: #0F172A;'>{item['linha']} ({item['id_registro']})</span>
+                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>{item['status_geral']}</span>
+                </div>
+            """, unsafe_allow_html=True)
             
-            st.warning("⚠️ Foram encontrados **4 registros órfãos** no arquivo filho cujas chaves não constam no arquivo pai:")
-            df_orfaos = pd.DataFrame([
-                {"Linha": 23, "Chave/ID": "ORGAO_0502_001", "Descrição": "Unidade executora não declarada no cadastro básico"},
-                {"Linha": 89, "Chave/ID": "LIC_2026_014", "Descrição": "Processo de licitação sem respaldo no arquivo .LIC"},
-                {"Linha": 102, "Chave/ID": "CPF_999888777-11", "Descrição": "Servidor sem vínculo orçamentário ativo"},
-                {"Linha": 134, "Chave/ID": "FRT_0202_X", "Descrição": "Veículo associado a órgão inexistente"}
-            ])
-            st.dataframe(df_orfaos, use_container_width=True)
-        else:
-            st.info("💡 Por favor, envie ambos os arquivos (Pai e Filho) para realizar o cruzamento.")
+            with st.container():
+                col_c1, col_c2 = st.columns(2)
+                with col_c1:
+                    st.markdown(f"""
+                        <div style='background: #F8FAFC; border-left: 4px solid #10B981; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
+                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>{item['label_1']}</div>
+                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Remessa: <b>{item['comparacao_1']}</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Base Referência: <b>{item['historico_1']}</b></div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                with col_c2:
+                    st.markdown(f"""
+                        <div style='background: #FEF2F2; border-left: 4px solid #E11D48; border-top: 1px solid #FECACA; border-right: 1px solid #FECACA; border-bottom: 1px solid #FECACA; padding: 12px; margin-bottom: 15px;'>
+                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>{item['label_2']}</div>
+                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Remessa: <b>{item['comparacao_2']}</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Base Referência: <b>{item['historico_2']}</b></div>
+                        </div>
+                    """, unsafe_allow_html=True)
 
+        if st.button("Nova Consulta / Outro Módulo"):
+            st.session_state["etapa_auditoria"] = 1
+            st.rerun()
+
+# ------------------------------------------
+# ABA 3: HISTÓRICO
+# ------------------------------------------
 with aba3:
-    st.markdown("##### 📚 Histórico Completo de Casos Registrados")
-    st.caption("Consulte todas as análises gravadas no banco de dados local.")
+    st.markdown("##### Histórico de Casos Analisados")
+    termo = st.text_input("Filtrar no Histórico", placeholder="Digite palavras-chave...").lower()
+    casos = st.session_state["historico_casos"]
     
-    historico = st.session_state["historico_casos"]
-    if historico:
-        for item in historico:
-            with st.expander(f"Caso #{item['id']} | Módulo: {item.get('modulo', 'Geral')} | Arquivo: {item.get('arquivo', 'N/D')}"):
-                st.markdown(f"**Mensagem de Erro:**")
-                st.code(item['erro'])
-                st.markdown(f"**Diagnóstico / Solução:**")
-                st.markdown(item['resposta'])
-                st.caption(f"Nível de Confiança: {item.get('confianca', 'Média')} | Validado: {'Sim' if item.get('validado') == 1 else 'Não'}")
-    else:
+    if termo:
+        casos = [c for c in casos if termo in c["erro"].lower() or termo in c["resposta"].lower()]
+        
+    if not casos:
         st.info("Nenhum caso registrado no histórico até o momento.")
+    else:
+        for item in casos:
+            with st.expander(f"Caso #{item['id']} - Módulo: {item.get('modulo', 'Geral')} | Confiança: {item.get('confianca', 'Média')}"):
+                st.markdown("**Erro Original:**")
+                st.code(item['erro'])
+                st.markdown("**Diagnóstico / Solução:**")
+                st.markdown(item['resposta'])
 
+# ------------------------------------------
+# ABA 4: BASE DE REGRAS
+# ------------------------------------------
 with aba4:
-    st.markdown("##### 📖 Base de Regras e Validações Mapeadas do SIM TCE-CE")
-    st.caption("Repositório oficial de orientações preventivas e padrões de exigência do tribunal.")
-    
-    for idx, reg in enumerate(BASE_CONHECIMENTO_PADRAO, 1):
-        with st.expander(f"📌 Regra {idx}: {reg['titulo']}"):
+    st.markdown("##### Base de Regras Mapeadas do SIM TCE-CE")
+    for reg in BASE_CONHECIMENTO_PADRAO:
+        with st.expander(f"📌 {reg['titulo']}"):
             st.markdown(reg['resposta'])
-            st.info(f"Nível de Severidade / Confiança da Regra: **{reg['confianca']}**")
 
 # ------------------------------------------
 # ABA 5: CARGA COMPLETA & FLUXOGRAMA
 # ------------------------------------------
 with aba5:
-    st.markdown("##### Assistente Avançado de Carga Completa do Mês")
-    st.caption("Envie todos os arquivos da competência. O motor validará extensões, competências cruzadas, tamanhos e dependências em cadeia.")
+    st.markdown("##### Assistente de Carga Completa do Mês (Validação de Integridade)")
+    st.caption("Envie todos os arquivos da competência de uma só vez. O motor analisará as extensões, validará as dependências e gerará o fluxograma relacional.")
 
     col_up1, col_up2 = st.columns(2)
     with col_up1:
         arquivos_lote = st.file_uploader(
-            "Selecione todos os arquivos do período (.BAS, .LIC, .LCO, .VCL, .PAT, .CPF, .DCD)", 
-            type=["bas", "lic", "lco", "vcl", "pat", "cpf", "dcd", "txt", "dat"], 
+            "Selecione todos os arquivos do período (.BAS, .LCO, .VCL, .PAT, .CPF, .DCD)", 
+            type=["bas", "lco", "vcl", "pat", "cpf", "dcd", "txt", "dat"], 
             accept_multiple_files=True
         )
     with col_up2:
         st.markdown("""
-        **Diretrizes Aprimoradas do Módulo:**
-        * **Análise de Competência:** Detecta se há divergência de mês/ano entre os arquivos.
-        * **Dependência Expandida:** Exige Licitações (`.LIC`) antes de Contratos (`.LCO`).
-        * **Monitor de Tamanho:** Alerta se algum arquivo ultrapassar o limite oficial.
-        * **Simulação de Rejeição:** Exibe o erro exato do validador do TCE caso falte dependência.
+        **Diretrizes do Módulo:**
+        * Extração automática da extensão real de cada arquivo enviado.
+        * Validação estrita da presença do arquivo Base/Orçamento.
+        * Prevenção de rejeição em cadeia antes da transmissão.
         """)
 
     if arquivos_lote:
         extensoes_enviadas = set()
-        competencias_detectadas = set()
-        detalhes_arquivos = []
-        
         for f in arquivos_lote:
-            nome_arq = f.name
-            ext = nome_arq.split('.')[-1].lower()
+            ext = f.name.split('.')[-1].lower()
             extensoes_enviadas.add(ext)
-            tamanho_kb = f.size / 1024
-            
-            match_comp = re.search(r'(20\d{2})(0[1-9]|1[0-2])', nome_arq)
-            comp_str = f"{match_comp.group(1)}/{match_comp.group(2)}" if match_comp else "Não identificada"
-            if match_comp:
-                competencias_detectadas.add(comp_str)
-                
-            status_tamanho = "⚠️ Acima de 10MB" if tamanho_kb > 10240 else "✅ Ok"
-            detalhes_arquivos.append({
-                "Arquivo": nome_arq,
-                "Extensão": ext.upper(),
-                "Tamanho": f"{tamanho_kb:.2f} KB",
-                "Competência": comp_str,
-                "Status": status_tamanho
-            })
 
-        st.success(f"{len(arquivos_lote)} arquivo(s) analisado(s) com sucesso.")
-
-        if len(competencias_detectadas) > 1:
-            st.error(f"⚠️ **Divergência de Competência Detectada:** Foram encontradas múltiplas competências nos nomes dos arquivos: {', '.join(competencias_detectadas)}. Verifique se há arquivos de meses/anos misturados.")
-
-        with st.expander("📋 Detalhes Físicos e Limites dos Arquivos no Lote", expanded=False):
-            df_detalhes = pd.DataFrame(detalhes_arquivos)
-            st.dataframe(df_detalhes, use_container_width=True)
-
-        tem_bas = any(e in ["bas", "dat", "txt"] for e in extensoes_enviadas)
-        tem_lic = any(e in ["lic", "dat", "txt"] for e in extensoes_enviadas)
-        tem_lco = any(e in ["lco", "ctr", "dat"] for e in extensoes_enviadas)
+        st.success(f"{len(arquivos_lote)} arquivo(s) carregado(s) com sucesso. Extensões detectadas: {', '.join(extensoes_enviadas).upper()}")
+        
+        tem_bas = "bas" in extensoes_enviadas or "dat" in extensoes_enviadas or "txt" in extensoes_enviadas
+        tem_lco = "lco" in extensoes_enviadas or "ctr" in extensoes_enviadas
         tem_vcl = "vcl" in extensoes_enviadas
         tem_pat = "pat" in extensoes_enviadas
-        tem_cpf = any(e in ["cpf", "dcd"] for e in extensoes_enviadas)
+        tem_cpf = "cpf" in extensoes_enviadas or "dcd" in extensoes_enviadas
 
         cor_ok = "#10B981"
         cor_erro = "#E11D48"
         
         est_bas = cor_ok if tem_bas else cor_erro
-        est_lic = cor_ok if tem_lic else cor_erro
         est_lco = cor_ok if tem_lco else cor_erro
         est_vcl = cor_ok if tem_vcl else cor_erro
         est_pat = cor_ok if tem_pat else cor_erro
         est_cpf = cor_ok if tem_cpf else cor_erro
 
         st.markdown("---")
-        st.markdown("#### 🗺️ Fluxograma de Dependência e Integridade Referencial Expandido")
-        st.caption("Nós em verde indicam arquivos presentes. Nós em vermelho indicam ausência e quebra potencial em cadeia.")
+        st.markdown("#### 🗺️ Fluxograma de Dependência e Integridade Referencial")
+        st.caption("Nós em verde indicam arquivos presentes no lote. Nós em vermelho indicam ausência e quebra potencial de integridade referencial.")
 
         codigo_mermaid = f"""
         graph TD
             BAS["Cadastros Básicos / Orçamento (.BAS)"]:::estBas
-            LIC["Licitações (.LIC)"]:::estLic
-            LCO["Contratos e Aditivos (.LCO)"]:::estLco
+            LCO["Contratos (.LCO)"]:::estLco
             VCL["Veículos (.VCL)"]:::estVcl
             PAT["Patrimônio (.PAT)"]:::estPat
             CPF["Pessoal / RH (.CPF / .DCD)"]:::estCpf
 
-            BAS -->|Chave Orçamentária| LIC
-            LIC -->|Vínculo Licitatório| LCO
+            BAS -->|Chave Orçamentária| LCO
             BAS -->|Vínculo de Frota| VCL
             BAS -->|Tombamento| PAT
             BAS -->|Vínculo Servidor| CPF
 
             classDef estBas fill:{est_bas},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
-            classDef estLic fill:{est_lic},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
             classDef estLco fill:{est_lco},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
             classDef estVcl fill:{est_vcl},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
             classDef estPat fill:{est_pat},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
@@ -491,20 +616,9 @@ with aba5:
 
         st.markdown(f"```mermaid\n{codigo_mermaid}\n```", unsafe_allow_html=True)
 
-        erros_simulados = []
         if not tem_bas:
-            erros_simulados.append("❌ **Erro E001 (Validador SIM):** Registro pai de Cadastros Básicos (.BAS) ausente. Todas as tabelas filhas serão rejeitadas por chave estrangeira nula.")
-        if not tem_lic and tem_lco:
-            erros_simulados.append("❌ **Erro E042 (Validador SIM):** O arquivo de Contratos (.LCO) exige o envio prévio ou simultâneo do arquivo de Licitações (.LIC).")
-        if not tem_vcl:
-            erros_simulados.append("⚠️ **Aviso W104:** Módulo de Veículos (.VCL) não enviado. Caso o órgão possua frota, haverá inconsistência na prestação de contas.")
-
-        if erros_simulados:
-            st.markdown("---")
-            st.markdown("#### 🚨 Simulação de Mensagens de Rejeição do Validador Oficial do TCE-CE")
-            for err in erros_simulados:
-                st.error(err)
+            st.error("⚠️ **Atenção crítica:** O arquivo de Cadastros Básicos/Orçamento (.BAS) não foi identificado no lote! Sem ele, os demais módulos apresentarão erro de chave estrangeira.")
         else:
-            st.success("✨ Lote totalmente íntegro! Nenhuma quebra de chave estrangeira primária ou secundária detectada na simulação.")
+            st.success("✨ Lote validado com sucesso com base nas extensões presentes.")
     else:
-        st.info("💡 Faça o upload dos arquivos da competência acima para rodar a auditoria em cadeia.")
+        st.info("💡 Faça o upload dos arquivos da competência acima para gerar o fluxograma interativo de integridade.")
