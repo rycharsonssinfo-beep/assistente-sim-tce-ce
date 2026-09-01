@@ -10,80 +10,86 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM
+# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM (NOVA IDENTIDADE)
 # ==========================================
 st.set_page_config(
-    page_title="Assistente SIM TCE-CE",
-    page_icon="⚖️",
+    page_title="Painel de Auditoria SIM TCE-CE",
+    page_icon="🛡️",
     layout="wide"
 )
 
+# Estilização CSS renovada (Paleta Emerald / Dark Slate)
 st.markdown("""
     <style>
     :root {
-        --bg-main: #F4F6F9;
+        --bg-main: #F8FAFC;
         --surface: #FFFFFF;
-        --border-color: #CBD5E1;
-        --border-subtle: #E2E8F0;
+        --border-color: #E2E8F0;
+        --border-strong: #CBD5E1;
         --text-main: #0F172A;
-        --text-secondary: #334155;
         --text-muted: #64748B;
-        --primary: #0284C7;
-        --primary-hover: #0369A1;
+        --primary: #059669; /* Verde Esmeralda */
+        --primary-hover: #047857;
+        --accent-danger: #E11D48;
+        --accent-success: #10B981;
     }
 
     .main {
         background-color: var(--bg-main);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
 
     .block-container {
-        padding-top: 2rem;
+        padding-top: 1.8rem;
         padding-bottom: 3rem;
-        max-width: 1200px;
+        max-width: 1240px;
     }
 
+    /* Títulos e Cabeçalhos */
     h1, h2, h3, h4 {
         color: var(--text-main);
-        font-weight: 600;
-        letter-spacing: -0.025em;
+        font-weight: 700;
+        letter-spacing: -0.03em;
     }
 
+    /* Abas Customizadas */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 6px;
-        background-color: #E2E8F0;
-        padding: 4px;
-        border-radius: 8px;
+        gap: 8px;
+        background-color: #F1F5F9;
+        padding: 6px;
+        border-radius: 10px;
+        border: 1px solid var(--border-color);
     }
     .stTabs [data-baseweb="tab"] {
-        height: 38px;
+        height: 40px;
         background-color: transparent;
         border-radius: 6px;
-        color: var(--text-secondary);
-        font-weight: 500;
-        font-size: 14px;
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 13px;
         border: none;
-        padding: 0 16px;
+        padding: 0 18px;
     }
     .stTabs [aria-selected="true"] {
         background-color: var(--surface) !important;
         color: var(--primary) !important;
-        font-weight: 600;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
 
+    /* Botões */
     .stButton button {
-        border-radius: 6px;
-        font-weight: 500;
+        border-radius: 8px;
+        font-weight: 600;
         font-size: 14px;
-        border: 1px solid var(--border-color);
+        border: 1px solid var(--border-strong);
         background-color: var(--surface);
-        color: var(--text-secondary);
-        transition: all 0.15s ease;
+        color: var(--text-main);
+        transition: all 0.2s ease;
     }
     .stButton button:hover {
         border-color: var(--primary);
         color: var(--primary);
+        background-color: #F0FDF4;
     }
 
     .stButton button[kind="primary"] {
@@ -94,33 +100,22 @@ st.markdown("""
     .stButton button[kind="primary"]:hover {
         background-color: var(--primary-hover);
         color: white;
+        box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.3);
     }
 
-    .stTextArea textarea, .stTextInput input {
-        border-radius: 8px !important;
-        border-color: var(--border-color) !important;
-        background-color: var(--surface) !important;
-        color: var(--text-main) !important;
-    }
-    .stTextArea textarea:focus, .stTextInput input:focus {
-        border-color: var(--primary) !important;
-        box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important;
-    }
-
+    /* Sidebar */
     section[data-testid="stSidebar"] {
-        background-color: #EBF2F7;
+        background-color: #F1F5F9;
         border-right: 1px solid var(--border-color);
     }
-    section[data-testid="stSidebar"] .block-container {
-        padding-top: 1.5rem;
-    }
 
-    div[data-testid="stExpander"] {
-        background-color: var(--surface);
+    /* Cards Personalizados para Auditoria */
+    .card-audit {
+        background: white;
         border: 1px solid var(--border-color);
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        margin-bottom: 12px;
+        border-radius: 10px;
+        padding: 16px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -477,80 +472,66 @@ def chamar_gemini_seguro(prompt, contexto_anterior=None):
 # 7. BARRA LATERAL (SIDEBAR)
 # ==========================================
 with st.sidebar:
-    st.markdown("### SIM TCE-CE")
-    st.caption("Assistente de Diagnóstico Técnico")
+    st.markdown("## 🛡️ SIM Audit")
+    st.caption("Painel de Conciliação e Consistência")
     st.markdown("---")
     
-    st.markdown("**Sobre a Ferramenta**")
-    st.markdown("<span style='font-size: 13px; color: #334155;'>Plataforma inteligente com busca híbrida, curadoria de conhecimento validado e persistência SQLite.</span>", unsafe_allow_html=True)
+    st.markdown("**Status da Base**")
+    st.metric(label="Casos em Memória", value=len(st.session_state['historico_casos']))
     
     st.markdown("---")
-    st.markdown("**Base Permanente**")
-    st.markdown(f"<div style='background: white; border: 1px solid #CBD5E1; padding: 10px 14px; border-radius: 6px; margin-top: 6px;'><span style='font-size: 18px; font-weight: 700; color: #0F172A;'>{len(st.session_state['historico_casos'])}</span> <span style='font-size: 13px; color: #64748B;'>casos armazenados</span></div>", unsafe_allow_html=True)
-    
-    st.markdown("---")
-    st.markdown("**Backup e Restauração**")
+    st.markdown("**Gestão de Dados**")
     
     dados_json_str = exportar_base_json()
     st.download_button(
-        label="Baixar cópia de segurança",
+        label="Exportar Backup (.JSON)",
         data=dados_json_str,
-        file_name="backup_historico_sim_tce.json",
+        file_name="backup_audit_sim_tce.json",
         mime="application/json",
-        use_container_width=True,
-        help="Gera um arquivo de backup com todos os diagnósticos salvos."
+        use_container_width=True
     )
     
     arquivo_submetido = st.file_uploader(
-        "Carregar cópia salva", 
-        type=["json"],
-        help="Selecione um arquivo de backup gerado anteriormente."
+        "Importar Backup", 
+        type=["json"]
     )
     
     if arquivo_submetido is not None:
-        if st.button("Confirmar restauração", use_container_width=True):
+        if st.button("Restaurar Base", use_container_width=True):
             sucesso_imp, qtd_imp = importar_base_json(arquivo_submetido)
             if sucesso_imp:
                 st.session_state["historico_casos"] = carregar_historico_db()
-                st.success(f"Histórico restaurado! {qtd_imp} registro(s) processados.")
+                st.success(f"{qtd_imp} caso(s) importado(s)!")
                 st.rerun()
-            else:
-                st.error("Erro ao processar o arquivo enviado.")
-
-    st.markdown("---")
-    st.caption("Desenvolvido para otimização de rotinas contábeis.")
 
 # ==========================================
 # 8. TELA PRINCIPAL E ABAS
 # ==========================================
-st.markdown("### Assistente de Diagnóstico SIM TCE-CE")
-st.markdown("<span style='color: #334155; font-size: 15px;'>Central inteligente de análise de consistências, tradução de logs e auditoria cruzada.</span>", unsafe_allow_html=True)
-st.markdown("---")
+st.title("Audit & Diagnóstico SIM TCE-CE")
+st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada para auditoria cruzada de arquivos e diagnóstico rápido de consistência.</span>", unsafe_allow_html=True)
 
 aba1, aba2, aba3, aba4 = st.tabs([
-    "Diagnóstico Inteligente", 
-    "Histórico Permanente", 
-    "Base de Conhecimento",
-    "Auditoria e Conciliação"
+    "🔍 Diagnóstico de Ocorrências", 
+    "📊 Auditoria Cruzada",
+    "📚 Histórico Registrado", 
+    "📖 Base de Regras"
 ])
 
 # ------------------------------------------
 # ABA 1: DIAGNÓSTICO E ENTRADA DE LOGS
 # ------------------------------------------
 with aba1:
-    st.markdown("")
-    st.markdown("##### Entrada de Dados do Relatório de Ocorrência")
-    st.markdown("<span style='font-size: 13px; color: #475569;'>Cole abaixo o trecho do relatório de ocorrência do PGI/SIM TCE-CE para gerar o diagnóstico técnico.</span>", unsafe_allow_html=True)
+    st.markdown("##### Entrada de Logs e Inconsistências")
     
-    col_ex1, col_ex2, col_space = st.columns([1, 1, 2])
+    col_ex1, col_ex2, col_space = st.columns([1.5, 1.5, 2])
     with col_ex1:
-        if st.button("Exemplo: Veículos (.VCL)", use_container_width=True):
+        if st.button("Carregar Exemplo: Veículos", use_container_width=True):
             st.session_state["erro_input"] = (
                 "BV202607.VCL - DESTINAÇÃO DE VEÍCULOS\n"
                 "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, dt_versao_orc, cd_orgao, cd_unid_orc ) que compõe(m) a chave do arquivo UNIDADES_ORCAMENTARIAS."
             )
     with col_ex2:
-        if st.button("Exemplo: Patrimônio (.PAT)", use_container_width=True):
+        if st.button("Carregar Exemplo: Patrimônio", use_container_width=True):
             st.session_state["erro_input"] = (
                 "RP202607.PAT - CONTAS REDUTORAS DOS BENS INCORPORADOS AO PATRIMÔNIO DO MUNICÍPIO\n"
                 "Descrição: Não há relação com o(s) campo(s) ( cd_municipio, nu_registro_bem ) que compõe(m) a chave do arquivo BENS_MUNICIPIOS."
@@ -559,44 +540,29 @@ with aba1:
     user_input = st.text_area(
         "Relatório de Erro",
         value=st.session_state.get("erro_input", ""),
-        height=150,
-        placeholder="Cole o trecho do erro aqui..."
+        height=140,
+        placeholder="Cole a mensagem de erro fornecida pelo validador do TCE..."
     )
-
-    num_chars = len(user_input)
-    st.caption(f"Caracteres: {num_chars} / {LIMITE_CARACTERES}")
-
-    if num_chars > LIMITE_CARACTERES:
-        st.warning("O relatório informado é muito extenso. Envie preferencialmente o trecho relacionado à ocorrência.")
 
     if user_input.strip():
         sigla_arq, modulo_identificado = classificar_erro(user_input)
         titulo_extraido = extrair_titulo_erro(user_input)
         encontrou_campos = re.findall(r'cd_[a-z_]+|dt_[a-z_]+|nu_[a-z_]+', user_input, re.IGNORECASE)
         
-        badges_html = "<div style='display: flex; gap: 8px; margin: 12px 0 16px 0; flex-wrap: wrap; align-items: center;'>"
-        if sigla_arq:
-            badges_html += f"<span style='background-color: #E0F2FE; color: #0369A1; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #7DD3FC;'>Módulo: {modulo_identificado} (.</span><span style='background-color: #E0F2FE; color: #0369A1; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #7DD3FC;'>{sigla_arq})</span>"
-        if titulo_extraido:
-            badges_html += f"<span style='background-color: #F1F5F9; color: #334155; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #CBD5E1;'>Título: {titulo_extraido.title()}</span>"
-        if encontrou_campos:
-            amostra_campos = ", ".join(set(encontrou_campos[:4]))
-            badges_html += f"<span style='background-color: #FEF3C7; color: #B45309; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #FCD34D;'>Chaves: {amostra_campos}</span>"
-        badges_html += "</div>"
-            
-        st.markdown(badges_html, unsafe_allow_html=True)
+        st.markdown(f"""
+            <div style='background: #ECFDF5; border: 1px solid #A7F3D0; padding: 10px 16px; border-radius: 8px; margin-bottom: 15px;'>
+                <span style='color: #065F46; font-size: 13px; font-weight: 600;'>Módulo Identificado: {modulo_identificado} ({sigla_arq if sigla_arq else 'Geral'})</span>
+                {f" | <span style='color: #047857; font-size: 13px;'>Chaves: {', '.join(set(encontrou_campos[:3]))}</span>" if encontrou_campos else ""}
+            </div>
+        """, unsafe_allow_html=True)
 
-    st.markdown("")
-    if st.button("Processar Análise Técnica", type="primary", use_container_width=True):
+    if st.button("Analisar Inconsistência", type="primary", use_container_width=True):
         texto_limpo = user_input.strip()
         
         if not texto_limpo:
-            st.warning("Por favor, insira ou carregue um texto de erro antes de processar a análise.")
-        elif len(texto_limpo) < 10:
-            st.warning("O texto inserido é muito curto para uma análise técnica válida.")
+            st.warning("Insira o texto da ocorrência antes de processar.")
         else:
             sigla_arq, modulo_identificado = classificar_erro(texto_limpo)
-            
             resposta_obtida, confianca_obtida = buscar_na_base_conhecimento(texto_limpo)
             origem_resposta = "Base de Conhecimento"
             
@@ -604,193 +570,90 @@ with aba1:
                 caso_encontrado, tipo_match, score = buscar_caso_no_historico(texto_limpo)
                 if caso_encontrado and (tipo_match in ["Exata", "Validado e Semelhante"] or score >= 0.60):
                     resposta_obtida = caso_encontrado["resposta"]
-                    confianca_obtida = caso_encontrado.get("confianca", "Alta" if tipo_match=="Exata" else "Média")
-                    origem_resposta = f"Histórico Permanente ({tipo_match})"
+                    confianca_obtida = caso_encontrado.get("confianca", "Alta")
+                    origem_resposta = f"Histórico ({tipo_match})"
             
             if not resposta_obtida:
-                with st.spinner("Analisando leiaute e consultando diretrizes de suporte..."):
+                with st.spinner("Consultando motor de IA..."):
                     caso_parcial, _, _ = buscar_caso_no_historico(texto_limpo)
-                    contexto_auxiliar = caso_parcial["resposta"] if caso_parcial else None
-                    
-                    resp_ia, status_ia = chamar_gemini_seguro(texto_limpo, contexto_anterior=contexto_auxiliar)
+                    resp_ia, status_ia = chamar_gemini_seguro(texto_limpo, contexto_anterior=caso_parcial["resposta"] if caso_parcial else None)
                     
                     if resp_ia and status_ia == "Sucesso":
                         resposta_obtida = resp_ia
-                        confianca_obtida = "Média" if "Média" in resp_ia else "Alta"
-                        origem_resposta = "Inteligência Artificial (Gemini)"
+                        confianca_obtida = "Média"
+                        origem_resposta = "Modelos IA"
                         salvar_caso_db(texto_limpo, resposta_obtida, confianca=confianca_obtida, validado=0, modulo=modulo_identificado, arquivo=sigla_arq)
                         st.session_state["historico_casos"] = carregar_historico_db()
-                    else:
-                        st.error(f"Falha na consulta ao serviço de IA: {status_ia}")
-                        resposta_obtida = None
 
             if resposta_obtida:
                 st.markdown("---")
-                st.success(f"Diagnóstico obtido com sucesso via **{origem_resposta}**!")
-                
-                cor_conf = "#166534" if confianca_obtida == "Alta" else ("#B45309" if confianca_obtida == "Média" else "#991B1B")
-                bg_conf = "#DCFCE7" if confianca_obtida == "Alta" else ("#FEF3C7" if confianca_obtida == "Média" else "#FEF2F2")
-                
-                st.markdown(f"""
-                    <div style='display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #CBD5E1; border-radius: 8px 8px 0 0; padding: 14px 24px; border-bottom: none;'>
-                        <span style='font-weight: 600; color: #0F172A;'>Diagnóstico e Orientação Técnica</span>
-                        <span style='background-color: {bg_conf}; color: {cor_conf}; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;'>Nível de Confiabilidade: {confianca_obtida}</span>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                with st.container():
-                    st.markdown("""
-                    <div style='background: white; border: 1px solid #CBD5E1; border-top: none; border-radius: 0 0 8px 8px; padding: 24px; margin-top: -10px; margin-bottom: 20px;'>
-                    """, unsafe_allow_html=True)
-                    st.markdown(resposta_obtida)
-                    st.markdown("</div>", unsafe_allow_html=True)
+                st.markdown(f"### Resultado da Análise (`{origem_resposta}`)")
+                st.info(resposta_obtida)
 
 # ------------------------------------------
-# ABA 2: HISTÓRICO COM BUSCA E FEEDBACK
+# ABA 2: AUDITORIA E CONCILIAÇÃO CRUZADA (ETAPAS REDESENHADAS)
 # ------------------------------------------
 with aba2:
-    st.markdown("")
-    st.markdown("##### Repositório de Casos Resolvidos")
-    st.markdown("<span style='font-size: 13px; color: #475569;'>Consulte os casos salvos utilizando busca inteligente e avalie a utilidade das respostas.</span>", unsafe_allow_html=True)
-    st.markdown("")
-
-    if not st.session_state["historico_casos"]:
-        st.info("Ainda não há casos salvos na base permanente. Realize sua primeira análise na aba de Diagnóstico.")
-    else:
-        termo_busca_historico = st.text_input(
-            "Pesquisa no Histórico", 
-            placeholder="Digite termos ou descrições (ex: erro de chave, unidades, patrimônio)..."
-        ).lower()
-
-        casos_atuais = st.session_state["historico_casos"]
-
-        if termo_busca_historico.strip():
-            casos_filtrados = []
-            termo_norm = normalizar_texto(termo_busca_historico)
-            for c in casos_atuais:
-                if termo_norm in normalizar_texto(c["erro"]) or termo_norm in normalizar_texto(c["resposta"]) or termo_norm in normalizar_texto(c.get("modulo", "")):
-                    casos_filtrados.append(c)
-        else:
-            casos_filtrados = sorted(casos_atuais, key=lambda x: (x.get('validado', 0), x.get('feedback', 0)), reverse=True)
-
-        if not casos_filtrados:
-            st.warning("Nenhum caso correspondente encontrado na base permanente com este critério.")
-        else:
-            st.markdown(f"<span style='font-size: 13px; color: #475569;'>Exibindo <b>{len(casos_filtrados)}</b> de <b>{len(casos_atuais)}</b> registro(s)</span>", unsafe_allow_html=True)
-            st.markdown("")
-            
-            for idx, caso in enumerate(casos_filtrados):
-                titulo_resumo = caso["erro"].split("\n")[0] if "\n" in caso["erro"] else caso["erro"][:65]
-                
-                with st.expander(f"Caso #{caso['id']} — {titulo_resumo}  [{caso.get('modulo', 'Geral')}]"):
-                    if caso.get('validado', 0) == 1 or caso.get('feedback', 0) == 1:
-                        st.markdown("<span style='background-color: #DCFCE7; color: #166534; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #BBF7D0;'>Status: Aprovado e Validado</span>", unsafe_allow_html=True)
-                    elif caso.get('feedback', 0) == -1:
-                        st.markdown("<span style='background-color: #FEF2F2; color: #991B1B; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #FECACA;'>Status: Requer atenção</span>", unsafe_allow_html=True)
-                    else:
-                        st.markdown("<span style='background-color: #F1F5F9; color: #475569; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #E2E8F0;'>Status: Não avaliado</span>", unsafe_allow_html=True)
-                    
-                    st.markdown("")
-                    st.markdown("**Log Registrado:**")
-                    st.markdown(f"<div style='background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 13px;'>{caso['erro']}</div>", unsafe_allow_html=True)
-                    st.markdown("---")
-                    st.markdown(caso["resposta"])
-                    st.markdown("---")
-                    
-                    col_fb1, col_fb2, col_fb3 = st.columns([2, 2, 6])
-                    with col_fb1:
-                        if st.button("Resposta útil", key=f"btn_sim_{caso['id']}"):
-                            atualizar_feedback_db(caso['id'], 1)
-                            st.session_state["historico_casos"] = carregar_historico_db()
-                            st.success("Caso marcado como útil e validado com alta prioridade.")
-                            st.rerun()
-                    with col_fb2:
-                        if st.button("Precisa melhorar", key=f"btn_nao_{caso['id']}"):
-                            atualizar_feedback_db(caso['id'], -1)
-                            st.session_state["historico_casos"] = carregar_historico_db()
-                            st.warning("Feedback registrado.")
-                            st.rerun()
-
-# ------------------------------------------
-# ABA 3: BASE DE CONHECIMENTO
-# ------------------------------------------
-with aba3:
-    st.markdown("")
-    st.markdown("##### Diretrizes Oficiais Pré-Cadastradas")
-    st.markdown("<span style='font-size: 13px; color: #475569;'>Repositório nativo de regras e soluções estruturadas para os principais módulos do SIM.</span>", unsafe_allow_html=True)
-    st.markdown("---")
-
-    for idx, item in enumerate(BASE_CONHECIMENTO_PADRAO):
-        with st.expander(f"📁 {item['titulo']} (Confiabilidade: {item['confianca']})"):
-            st.markdown(item["resposta"])
-            st.markdown(f"**Chaves de Gatilho:** `{', '.join(item['chaves'])}`")
-
-# ------------------------------------------
-# ABA 4: AUDITORIA E CONCILIAÇÃO CRUZADA (ETAPAS)
-# ------------------------------------------
-with aba4:
-    st.markdown("")
-    
     if "etapa_auditoria" not in st.session_state:
         st.session_state["etapa_auditoria"] = 1
 
     passo = st.session_state["etapa_auditoria"]
     
-    col_p1, col_p2, col_p3, col_p_space = st.columns([1.2, 1.2, 1.2, 5])
-    with col_p1:
-        st.markdown(f"<div style='background: {'#0284C7' if passo==1 else '#E2E8F0'}; color: {'white' if passo==1 else '#64748B'}; padding: 6px 12px; border-radius: 6px; text-align: center; font-size: 13px; font-weight: 600;'>1 Linhas</div>", unsafe_allow_html=True)
-    with col_p2:
-        st.markdown(f"<div style='background: {'#0284C7' if passo==2 else '#E2E8F0'}; color: {'white' if passo==2 else '#64748B'}; padding: 6px 12px; border-radius: 6px; text-align: center; font-size: 13px; font-weight: 600;'>2 Arquivo</div>", unsafe_allow_html=True)
-    with col_p3:
-        st.markdown(f"<div style='background: {'#0284C7' if passo==3 else '#E2E8F0'}; color: {'white' if passo==3 else '#64748B'}; padding: 6px 12px; border-radius: 6px; text-align: center; font-size: 13px; font-weight: 600;'>3 Resultado</div>", unsafe_allow_html=True)
+    # Barra de Etapas em Estilo Pipeline
+    st.markdown(f"""
+        <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>
+                Passo 1: Definir Alvos
+            </div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==2 else "#F1F5F9"}; color: {"white" if passo==2 else "#64748B"}; font-weight: 600; font-size: 13px;'>
+                Passo 2: Enviar Fontes
+            </div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px;'>
+                Passo 3: Relatório Final
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
-    st.markdown("---")
-
-    # ETAPA 1: DEFINIR LINHAS COM ERRO
+    # ETAPA 1
     if passo == 1:
-        st.markdown("##### Defina as linhas com erro para iniciar")
-        st.markdown("<span style='font-size: 13px; color: #475569;'>Informe quais linhas do arquivo apresentam divergência para focar a auditoria.</span>", unsafe_allow_html=True)
-        st.markdown("")
+        st.markdown("##### 1. Informe as Linhas com Divergência")
+        st.caption("Especifique os números das linhas sinalizadas pelo relatório do TCE para direcionar a varredura.")
         
-        linhas_input = st.text_area("Linhas com erro", placeholder="Ex.: 113, 150, 201-205", height=120)
+        linhas_input = st.text_area("Seleção de Linhas", placeholder="Exemplo: 10, 15, 22-30", height=100)
         
-        st.markdown("")
-        col_btn1, col_space_btn = st.columns([2, 8])
-        with col_btn1:
-            if st.button("Avançar para upload", type="primary", use_container_width=True):
-                st.session_state["linhas_com_erro"] = linhas_input
-                st.session_state["etapa_auditoria"] = 2
-                st.rerun()
+        if st.button("Avançar para Carga de Arquivos →", type="primary"):
+            st.session_state["linhas_com_erro"] = linhas_input
+            st.session_state["etapa_auditoria"] = 2
+            st.rerun()
 
-    # ETAPA 2: UPLOAD DOS ARQUIVOS
+    # ETAPA 2
     elif passo == 2:
-        st.markdown("##### Módulo de Conciliação e Auditoria Cruzada")
-        st.markdown("<span style='font-size: 13px; color: #475569;'>Envie os arquivos oficiais do SIM/TCE-CE para validação das linhas especificadas.</span>", unsafe_allow_html=True)
-        st.markdown("")
+        st.markdown("##### 2. Upload de Arquivos de Origem e Destino")
+        st.caption("Carregue as remessas para execução da auditoria cruzada.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.file_uploader("Arquivo A (.DCD / Remessa)", type=["dcd", "txt", "dat"])
+        with col2:
+            st.file_uploader("Arquivo B (.LCO / Referência)", type=["lco", "txt", "dat"])
 
-        col_up1, col_up2 = st.columns(2)
-        with col_up1:
-            arquivo_ne = st.file_uploader("Clique ou arraste o arquivo NE (.DCD)", type=["dcd", "txt", "dat"])
-        with col_up2:
-            arquivo_co = st.file_uploader("Clique ou arraste o arquivo CO (.LCO)", type=["lco", "txt", "dat", "ose", "crd"])
-
-        st.markdown("")
-        col_b_vol, col_b_av = st.columns([2, 2])
-        with col_b_vol:
-            if st.button("Voltar", use_container_width=True):
+        col_b1, col_b2 = st.columns([1, 4])
+        with col_b1:
+            if st.button("← Voltar"):
                 st.session_state["etapa_auditoria"] = 1
                 st.rerun()
-        with col_b_av:
-            if st.button("Executar análise", type="primary", use_container_width=True):
+        with col_b2:
+            if st.button("Executar Conciliação", type="primary"):
                 st.session_state["etapa_auditoria"] = 3
                 st.rerun()
 
-    # ETAPA 3: RESULTADO DETALHADO
+    # ETAPA 3: DESIGN EXCLUSIVO DE CARDS
     elif passo == 3:
-        st.markdown("##### Resultado da Análise")
-        st.markdown("<span style='font-size: 13px; color: #475569;'>Mostrando comparação detalhada por campos do registro.</span>", unsafe_allow_html=True)
+        st.markdown("##### 3. Conciliação por Campo do Registro")
+        st.caption("Abaixo estão destacados os campos auditados e a indicação de conformidade.")
         st.markdown("")
 
+        # Registro de Exemplo com Layout em Cards Limpos
         itens_analisados = [
             {
                 "linha": "Linha 1",
@@ -798,53 +661,76 @@ with aba4:
                 "historico_contrato": "09.27.04.26.001",
                 "cpf_arquivo": "95991360391",
                 "cpf_historico": "AcmPN41eFzWYQ0IVLyjz/g==",
-                "status_geral": "Contrato localizado"
+                "status_geral": "Contrato Localizado com Divergência de CPF"
             }
         ]
 
         for item in itens_analisados:
+            # Header do Card Principal
+            st.markdown(f"""
+                <div style='background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px 10px 0 0; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;'>
+                    <span style='font-size: 16px; font-weight: 700; color: #0F172A;'>{item['linha']}</span>
+                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>{item['status_geral']}</span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Container de Conteúdo Usando Colunas do Streamlit
             with st.container():
-                st.markdown(f"""
-                    <div style='background: white; border: 1px solid #CBD5E1; border-radius: 8px; padding: 16px 20px; margin-bottom: 12px;'>
-                        <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;'>
-                            <span style='font-weight: 600; color: #0F172A; font-size: 15px;'>{item['linha']}</span>
-                            <span style='background-color: #DCFCE7; color: #166534; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;'>{item['status_geral']}</span>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
+                col_c1, col_c2, col_c3 = st.columns(3)
                 
-                col_b1, col_b2, col_b3 = st.columns(3)
-                
-                with col_b1:
-                    st.markdown(f"""
-                        <div style='background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 6px;'>Contrato</div>
-                            <div style='font-size: 13px; color: #64748B;'>Arquivo: <b style='color: #0F172A;'>{item['contrato']}</b></div>
-                            <div style='font-size: 13px; color: #64748B;'>Histórico: <b style='color: #0F172A;'>{item['historico_contrato']}</b></div>
+                with col_c1:
+                    st.markdown("""
+                        <div style='background: #F8FAFC; border-left: 4px solid #10B981; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
+                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>NÚMERO DO CONTRATO</div>
+                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Remessa: <b>09.27.04.26.001</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Base SIM: <b>09.27.04.26.001</b></div>
                         </div>
                     """, unsafe_allow_html=True)
-                    
-                with col_b2:
-                    st.markdown(f"""
-                        <div style='background: #FEF2F2; border: 1px solid #FECACA; border-radius: 6px; padding: 12px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase; margin-bottom: 6px;'>CPF Gestor</div>
-                            <div style='font-size: 13px; color: #64748B;'>Arquivo: <b style='color: #991B1B;'>{item['cpf_arquivo']}</b></div>
-                            <div style='font-size: 13px; color: #64748B;'>Histórico: <b style='color: #0F172A;'>{item['cpf_historico']}</b></div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                with col_b3:
-                    st.markdown(f"""
-                        <div style='background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px;'>
-                            <div style='font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 6px;'>Assinatura</div>
-                            <div style='font-size: 13px; color: #64748B;'>Arquivo: <b style='color: #0F172A;'>27/04/2026</b></div>
-                            <div style='font-size: 13px; color: #64748B;'>Histórico: <b style='color: #0F172A;'>27/04/2026</b></div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                
-                st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
-        st.markdown("")
-        if st.button("Nova Análise", use_container_width=True):
+                with col_c2:
+                    st.markdown("""
+                        <div style='background: #FEF2F2; border-left: 4px solid #E11D48; border-top: 1px solid #FECACA; border-right: 1px solid #FECACA; border-bottom: 1px solid #FECACA; padding: 12px; margin-bottom: 15px;'>
+                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>CPF DO GESTOR</div>
+                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Remessa: <b>95991360391</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Base SIM: <b>AcmPN41eFzWYQ0IVLyjz/g==</b></div>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                with col_c3:
+                    st.markdown("""
+                        <div style='background: #F8FAFC; border-left: 4px solid #10B981; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
+                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>DATA ASSINATURA</div>
+                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Remessa: <b>27/04/2026</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Base SIM: <b>27/04/2026</b></div>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+        if st.button("Nova Consulta"):
             st.session_state["etapa_auditoria"] = 1
             st.rerun()
+
+# ------------------------------------------
+# ABA 3: HISTÓRICO PERMANENTE
+# ------------------------------------------
+with aba3:
+    st.markdown("##### Histórico de Casos Analisados")
+    
+    termo = st.text_input("Filtrar no Histórico", placeholder="Digite palavras-chave...").lower()
+    casos = st.session_state["historico_casos"]
+    
+    if termo:
+        casos = [c for c in casos if termo in c["erro"].lower() or termo in c["resposta"].lower()]
+        
+    for item in casos:
+        with st.expander(f"Caso #{item['id']} - {item.get('modulo', 'Geral')}"):
+            st.code(item['erro'])
+            st.markdown(item['resposta'])
+
+# ------------------------------------------
+# ABA 4: BASE DE REGRAS
+# ------------------------------------------
+with aba4:
+    st.markdown("##### Regras Mapeadas do SIM TCE-CE")
+    for reg in BASE_CONHECIMENTO_PADRAO:
+        with st.expander(f"📌 {reg['titulo']}"):
+            st.markdown(reg['resposta'])
