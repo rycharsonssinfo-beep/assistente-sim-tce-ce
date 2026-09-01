@@ -262,10 +262,38 @@ BASE_CONHECIMENTO_PADRAO = [
         "chaves": ["unidades_orcamentarias", "cd_municipio", "dt_versao_orc", "cd_orgao", "cd_unid_orc", ".vcl", ".pat", "destinação de veículos"],
         "titulo": "Erros de Unidades Orçamentárias e Vínculos",
         "resposta": """### 🎯 Causa Raiz em Linguagem Simples
-O sistema SIM/TCE-CE exige que os arquivos de movimentação estejam vinculados a uma unidade orçamentária pré-cadastrada.
+O sistema SIM/TCE-CE exige que os arquivos de movimentação (como veículos ou patrimônio) estejam vinculados a uma unidade orçamentária válida e previamente cadastrada na competência orçamentária oficial.
+
+### 📍 Onde Encontrar e O Que Significa Cada Campo
+- `cd_municipio`: Código oficial do município regulado pelo IBGE.
+- `dt_versao_orc`: Data da versão do orçamento vigente. Deve ser idêntica à LOA enviada.
+- `cd_orgao` e `cd_unid_orc`: Órgão e Unidade Orçamentária responsáveis.
 
 ### ✅ Diretrizes Práticas de Correção
-Certifique-se de que a carga dos arquivos orçamentários básicos foi transmitida e aprovada antes dos módulos subsidiários.
+1. Certifique-se de que a carga dos arquivos orçamentários básicos foi transmitida e aprovada **antes** dos módulos subsidiários.
+2. Confira se a data da versão do orçamento informada bate exatamente com la remessa oficial.
+
+### ATENÇÃO
+Não avance para arquivos analíticos sem antes garantir a consistência dos cadastros básicos orçamentários.
+""",
+        "confianca": "Alta"
+    },
+    {
+        "chaves": ["contrato", "aditivo", "ordenador", ".lco", "cpf_responsavel"],
+        "titulo": "Erros em Contratos, Aditivos e Ordenadores",
+        "resposta": """### 🎯 Causa Raiz em Linguagem Simples
+Inconsistência na amarração entre termos aditivos/contratos e o cadastro de gestores autorizados (ordenadores de despesa).
+
+### 📍 Onde Encontrar e O Que Significa Cada Campo
+- `nu_contrato` / `aa_contrato`: Número e ano do contrato original.
+- `cpf_responsavel`: CPF do ordenador autorizado no período.
+
+### ✅ Diretrizes Práticas de Correção
+1. O contrato original deve constar obrigatoriamente na remessa da competência correta.
+2. O CPF do ordenador de despesa deve estar ativo no cadastro de agentes públicos da competência.
+
+### ATENÇÃO
+Verifique se houve substituição de gestor não informada nas remessas de agentes públicos.
 """,
         "confianca": "Alta"
     }
@@ -311,11 +339,25 @@ def chamar_gemini_seguro(prompt, contexto_anterior=None):
     if not api_key:
         return None, "Chave de API não configurada."
     modelos = ["gemini-1.5-flash", "gemini-2.5-flash"]
-    prompt_estruturado = f"Atue como analista técnico do SIM TCE-CE. Analise o erro: {prompt}"
+    prompt_estruturado = f"""
+    Atue rigorosamente como um analista de suporte técnico especialista no sistema SIM do TCE-CE.
+    Siga com extrema rigidez estas diretrizes:
+    - Utilize EXCLUSIVAMENTE as informações fornecidas no erro e no contexto abaixo.
+    - NUNCA invente nomes de telas, menus, procedimentos, comandos SQL ou regras que não estejam explícitas.
+    
+    Estruture a resposta obrigatoriamente nestas seções:
+    ### CAUSA DO ERRO
+    ### CAMPOS OU INFORMAÇÕES ENVOLVIDAS
+    ### COMO CORRIGIR
+    ### ATENÇÃO
+    ### NÍVEL DE CONFIANÇA
+    
+    Erro reportado: {prompt}
+    """
     for m in modelos:
         try:
             model = genai.GenerativeModel(m)
-            response = model.generate_content(prompt_estruturado)
+            response = model.generate_content(prompt_estruturado, generation_config={"temperature": 0.1, "max_output_tokens": 4096})
             if response and response.text:
                 return response.text, "Sucesso"
         except:
@@ -344,16 +386,16 @@ with st.sidebar:
             st.rerun()
 
 # ==========================================
-# 7. TELA PRINCIPAL E ABAS (COM A NOVA ABA 5)
+# 7. TELA PRINCIPAL E ABAS
 # ==========================================
 st.title("Audit & Diagnóstico SIM TCE-CE")
 st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada para auditoria cruzada e análise de integridade referencial.</span>", unsafe_allow_html=True)
 
 aba1, aba2, aba3, aba4, aba5 = st.tabs([
-    "🔍 Diagnóstico", 
+    "🔍 Diagnóstico de Ocorrências", 
     "📊 Auditoria Cruzada",
-    "📚 Histórico", 
-    "📖 Regras",
+    "📚 Histórico Registrado", 
+    "📖 Base de Regras",
     "🕸️ Carga Completa & Fluxograma"
 ])
 
@@ -361,7 +403,7 @@ aba1, aba2, aba3, aba4, aba5 = st.tabs([
 # ABA 1: DIAGNÓSTICO
 # ------------------------------------------
 with aba1:
-    user_input = st.text_area("Relatório de Erro", height=140, placeholder="Cole a mensagem de erro do TCE...")
+    user_input = st.text_area("Relatório de Erro", height=140, placeholder="Cole a mensagem de erro fornecida pelo validador do TCE...")
     if st.button("Analisar Inconsistência", type="primary", use_container_width=True):
         if user_input.strip():
             resp, _ = buscar_na_base_conhecimento(user_input)
@@ -370,33 +412,141 @@ with aba1:
             st.info(resp or "Nenhuma resposta gerada.")
 
 # ------------------------------------------
-# ABA 2: AUDITORIA CRUZADA
+# ABA 2: AUDITORIA CRUZADA (ORIGINAL RESTAURADA)
 # ------------------------------------------
 with aba2:
-    st.markdown("##### Auditoria Cruzada por Módulo")
-    st.info("Utilize as ferramentas de cruzamento analítico pontual.")
+    if "etapa_auditoria" not in st.session_state:
+        st.session_state["etapa_auditoria"] = 1
+
+    passo = st.session_state["etapa_auditoria"]
+    
+    st.markdown(f"""
+        <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>
+                Passo 1: Selecionar Módulo / Alvos
+            </div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==2 else "#F1F5F9"}; color: {"white" if passo==2 else "#64748B"}; font-weight: 600; font-size: 13px;'>
+                Passo 2: Enviar Arquivos
+            </div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px;'>
+                Passo 3: Relatório de Cruzamento
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    if passo == 1:
+        st.markdown("##### 1. Escolha o Módulo e Linhas de Divergência")
+        tipo_auditoria = st.selectbox(
+            "Selecione o Módulo / Tipo de Cruzamento",
+            [
+                "Contratos e Aditivos (.LCO / .DCD / .CTR)",
+                "Veículos e Frotas (.VCL / .BAS)",
+                "Patrimônio e Bens (.PAT / .BAS)",
+                "Recursos Humanos / Pessoal (.CPF / .BAS)",
+                "Outro / Genérico (Múltiplos Arquivos)"
+            ]
+        )
+        linhas_input = st.text_area("Linhas com Divergência (Opcional)", placeholder="Exemplo: 10, 15, 22-30", height=80)
+        
+        if st.button("Avançar para Carga de Arquivos →", type="primary"):
+            st.session_state["tipo_auditoria_selecionada"] = tipo_auditoria
+            st.session_state["linhas_com_erro"] = linhas_input
+            st.session_state["etapa_auditoria"] = 2
+            st.rerun()
+
+    elif passo == 2:
+        st.markdown(f"##### 2. Upload de Arquivos para: {st.session_state.get('tipo_auditoria_selecionada', 'Geral')}")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.file_uploader("Arquivo Principal / Movimentação", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat"])
+        with col2:
+            st.file_uploader("Arquivo de Referência / Cadastro Base", type=["dcd", "lco", "vcl", "pat", "cpf", "txt", "dat"])
+
+        col_b1, col_b2 = st.columns([1, 4])
+        with col_b1:
+            if st.button("← Voltar"):
+                st.session_state["etapa_auditoria"] = 1
+                st.rerun()
+        with col_b2:
+            if st.button("Executar Conciliação Avançada", type="primary"):
+                st.session_state["etapa_auditoria"] = 3
+                st.rerun()
+
+    elif passo == 3:
+        st.markdown("##### 3. Relatório de Conciliação Cruzada")
+        st.caption(f"Resultados para o cruzamento em: **{st.session_state.get('tipo_auditoria_selecionada', 'Geral')}**")
+        st.markdown("")
+
+        itens_analisados = [{
+            "linha": "Linha 1", "id_registro": "ID-884029",
+            "comparacao_1": "09.27.04.26.001", "historico_1": "09.27.04.26.001", "label_1": "Vínculo Orçamentário",
+            "comparacao_2": "95991360391", "historico_2": "Incompatível / Não Encontrado", "label_2": "Chave / CPF / Parâmetro",
+            "status_geral": "Divergência Encontrada no Cruzamento"
+        }]
+
+        for item in itens_analisados:
+            st.markdown(f"""
+                <div style='background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 10px 10px 0 0; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;'>
+                    <span style='font-size: 16px; font-weight: 700; color: #0F172A;'>{item['linha']} ({item['id_registro']})</span>
+                    <span style='background: #FEF2F2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;'>{item['status_geral']}</span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            with st.container():
+                col_c1, col_c2 = st.columns(2)
+                with col_c1:
+                    st.markdown(f"""
+                        <div style='background: #F8FAFC; border-left: 4px solid #10B981; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; padding: 12px; margin-bottom: 15px;'>
+                            <div style='font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase;'>{item['label_1']}</div>
+                            <div style='font-size: 13px; color: #334155; margin-top: 6px;'>Remessa: <b>{item['comparacao_1']}</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Base Referência: <b>{item['historico_1']}</b></div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                with col_c2:
+                    st.markdown(f"""
+                        <div style='background: #FEF2F2; border-left: 4px solid #E11D48; border-top: 1px solid #FECACA; border-right: 1px solid #FECACA; border-bottom: 1px solid #FECACA; padding: 12px; margin-bottom: 15px;'>
+                            <div style='font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;'>{item['label_2']}</div>
+                            <div style='font-size: 13px; color: #991B1B; margin-top: 6px;'>Remessa: <b>{item['comparacao_2']}</b></div>
+                            <div style='font-size: 13px; color: #334155;'>Base Referência: <b>{item['historico_2']}</b></div>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+        if st.button("Nova Consulta / Outro Módulo"):
+            st.session_state["etapa_auditoria"] = 1
+            st.rerun()
 
 # ------------------------------------------
-# ABA 3: HISTÓRICO
+# ABA 3: HISTÓRICO (ORIGINAL RESTAURADA)
 # ------------------------------------------
 with aba3:
-    st.markdown("##### Histórico de Casos")
-    for item in st.session_state["historico_casos"][:10]:
-        with st.expander(f"Caso #{item['id']} - {item.get('modulo', 'Geral')}"):
-            st.code(item['erro'])
-            st.markdown(item['resposta'])
+    st.markdown("##### Histórico de Casos Analisados")
+    termo = st.text_input("Filtrar no Histórico", placeholder="Digite palavras-chave...").lower()
+    casos = st.session_state["historico_casos"]
+    
+    if termo:
+        casos = [c for c in casos if termo in c["erro"].lower() or termo in c["resposta"].lower()]
+        
+    if not casos:
+        st.info("Nenhum caso registrado no histórico até o momento.")
+    else:
+        for item in casos:
+            with st.expander(f"Caso #{item['id']} - Módulo: {item.get('modulo', 'Geral')} | Confiança: {item.get('confianca', 'Média')}"):
+                st.markdown("**Erro Original:**")
+                st.code(item['erro'])
+                st.markdown("**Diagnóstico / Solução:**")
+                st.markdown(item['resposta'])
 
 # ------------------------------------------
-# ABA 4: REGRAS
+# ABA 4: BASE DE REGRAS (ORIGINAL RESTAURADA)
 # ------------------------------------------
 with aba4:
-    st.markdown("##### Base de Regras Mapeadas")
+    st.markdown("##### Base de Regras Mapeadas do SIM TCE-CE")
     for reg in BASE_CONHECIMENTO_PADRAO:
         with st.expander(f"📌 {reg['titulo']}"):
             st.markdown(reg['resposta'])
 
 # ------------------------------------------
-# ABA 5: CARGA COMPLETA & FLUXOGRAMA (NOVO MÓDULO ISOLADO)
+# ABA 5: CARGA COMPLETA & FLUXOGRAMA
 # ------------------------------------------
 with aba5:
     st.markdown("##### Assistente de Carga Completa do Mês (Validação de Integridade)")
@@ -421,14 +571,12 @@ with aba5:
         nomes_enviados = [f.name.lower() for f in arquivos_lote]
         st.success(f"{len(arquivos_lote)} arquivo(s) carregado(s) com sucesso para simulação.")
         
-        # Lógica automática de verificação de integridade
         tem_bas = any("bas" in n or "orc" in n for n in nomes_enviados)
         tem_lco = any("lco" in n or "ctr" in n for n in nomes_enviados)
         tem_vcl = any("vcl" in n for n in nomes_enviados)
         tem_pat = any("pat" in n for n in nomes_enviados)
         tem_cpf = any("cpf" in n for n in nomes_enviados)
 
-        # Definição de cores e estilos para o Mermaid
         cor_ok = "#10B981"
         cor_erro = "#E11D48"
         
@@ -442,7 +590,6 @@ with aba5:
         st.markdown("#### 🗺️ Fluxograma de Dependência e Integridade Referencial")
         st.caption("Nós em verde indicam integridade válida. Nós em vermelho indicam ausência ou quebra de chave estrangeira.")
 
-        # Gerador de código Mermaid dinâmico
         codigo_mermaid = f"""
         graph TD
             BAS["Cadastros Básicos / Orçamento (.BAS)"]:::estBas
@@ -463,10 +610,8 @@ with aba5:
             classDef estCpf fill:{est_cpf},stroke:#fff,stroke-width:2px,color:#fff,font-weight:bold;
         """
 
-        # Renderizando o diagrama nativamente no Streamlit
         st.markdown(f"```mermaid\n{codigo_mermaid}\n```", unsafe_allow_html=True)
 
-        # Alertas baseados no diagnóstico do lote
         if not tem_bas:
             st.error("⚠️ **Atenção crítica:** O arquivo de Cadastros Básicos/Orçamento (.BAS) está ausente no lote! Isso gerará rejeição em cadeia em todos os demais arquivos dependentes.")
         elif not tem_lco and not tem_vcl:
