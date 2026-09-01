@@ -231,31 +231,6 @@ def normalizar_texto(texto):
     t = re.sub(r'\s+', ' ', t).strip()
     return t
 
-def classificar_erro(texto):
-    ext_match = re.findall(r'\b([A-Z0-9]+)\.(VCL|LCO|PAT|CPF|BAS|DCD|DAT|TXT|OSE|CRD|CTR|LIC)\b', texto, re.IGNORECASE)
-    modulo_map = {
-        "VCL": "Veículos", "LCO": "Contratos e Aditivos", "PAT": "Patrimônio",
-        "CPF": "Recursos Humanos / Pessoal", "BAS": "Cadastros Básicos",
-        "DCD": "Dívida Consolidada", "OSE": "Obras e Serviços", "CRD": "Créditos", "CTR": "Contratos", "LIC": "Licitações"
-    }
-    arquivo_sigla, modulo = "", "Não identificado"
-    if ext_match:
-        arquivo_sigla = ext_match[0][1].upper()
-        modulo = modulo_map.get(arquivo_sigla, "Outros Módulos")
-    else:
-        t_lower = texto.lower()
-        if "veículo" in t_lower or "vcl" in t_lower:
-            arquivo_sigla, modulo = "VCL", "Veículos"
-        elif "contrato" in t_lower or "lco" in t_lower or "ctr" in t_lower:
-            arquivo_sigla, modulo = "LCO", "Contratos e Aditivos"
-        elif "licitação" in t_lower or "lic" in t_lower:
-            arquivo_sigla, modulo = "LIC", "Licitações"
-        elif "patrimônio" in t_lower or "pat" in t_lower:
-            arquivo_sigla, modulo = "PAT", "Patrimônio"
-        elif "servidor" in t_lower or "folha" in t_lower or "cpf" in t_lower:
-            arquivo_sigla, modulo = "CPF", "Recursos Humanos / Pessoal"
-    return arquivo_sigla, modulo
-
 # ==========================================
 # 4. BASE DE CONHECIMENTO EXTERNALIZADA
 # ==========================================
@@ -308,27 +283,6 @@ def buscar_na_base_conhecimento(texto_erro):
             if chave.lower() in t_norm:
                 return item["resposta"], item["confianca"]
     return None, None
-
-def buscar_caso_no_historico(texto_entrada):
-    historico = st.session_state["historico_casos"]
-    if not historico:
-        return None, "Nenhum", 0.0
-    texto_norm = normalizar_texto(texto_entrada)
-    for caso in historico:
-        if normalizar_texto(caso["erro"]) == texto_norm:
-            return caso, "Exata", 1.0
-    corpus = [normalizar_texto(c["erro"]) for c in historico]
-    corpus.append(texto_norm)
-    try:
-        vectorizer = TfidfVectorizer().fit(corpus)
-        vetores = vectorizer.transform(corpus).toarray()
-        similaridades = cosine_similarity([vetores[-1]], vetores[:-1])[0]
-        melhor_idx = similaridades.argmax()
-        if similaridades[melhor_idx] >= 0.35:
-            return historico[melhor_idx], "Semelhante", float(similaridades[melhor_idx])
-    except:
-        pass
-    return None, "Nenhum", 0.0
 
 # ==========================================
 # 5. CONFIGURAÇÃO DA API GEMINI
@@ -548,26 +502,23 @@ with aba4:
             st.markdown(reg['resposta'])
 
 # ------------------------------------------
-# ABA 5: CARGA COMPLETA & FLUXOGRAMA (COM BOTÃO DE LIMPEZA E TODAS AS MELHORIAS)
+# ABA 5: CARGA COMPLETA & FLUXOGRAMA (COM LIMPEZA CORRETA DO UPLOADER)
 # ------------------------------------------
 with aba5:
     st.markdown("##### Assistente de Carga Completa do Mês (Validação de Integridade)")
     st.caption("Envie todos os arquivos da competência de uma só vez. O motor analisará as extensões, validará competências, tamanhos, dependências (incluindo Licitações) e gerará o fluxograma relacional.")
 
-    if "limpar_arquivos" not in st.session_state:
-        st.session_state["limpar_arquivos"] = False
+    # Controla a versão do componente para permitir reset programático do uploader
+    if "uploader_version" not in st.session_state:
+        st.session_state["uploader_version"] = 0
 
     col_up1, col_up2 = st.columns(2)
     with col_up1:
-        if st.session_state["limpar_arquivos"]:
-            st.session_state["limpar_arquivos"] = False
-            st.rerun()
-
         arquivos_lote = st.file_uploader(
             "Selecione todos os arquivos do período (.BAS, .LIC, .LCO, .VCL, .PAT, .CPF, .DCD)", 
             type=["bas", "lic", "lco", "vcl", "pat", "cpf", "dcd", "txt", "dat"], 
             accept_multiple_files=True,
-            key="uploader_lote_arquivos"
+            key=f"uploader_lote_arquivos_{st.session_state['uploader_version']}"
         )
     with col_up2:
         st.markdown("""
@@ -580,7 +531,7 @@ with aba5:
 
         if arquivos_lote:
             if st.button("🗑️ Limpar Lote e Enviar Outros", use_container_width=True):
-                st.session_state["limpar_arquivos"] = True
+                st.session_state["uploader_version"] += 1
                 st.rerun()
 
     if arquivos_lote:
@@ -627,7 +578,7 @@ with aba5:
             mes_str = list(meses_detectados)[0] if meses_detectados else "Não identificado"
             st.success(f"✨ Competência consistente detectada nos arquivos: **Ano: {ano_str} | Mês: {mes_str}**")
 
-        # Validação estrita das dependências atualizadas
+        # Validação das dependências
         tem_bas = "bas" in extensoes_enviadas or "dat" in extensoes_enviadas or "txt" in extensoes_enviadas
         tem_lic = "lic" in extensoes_enviadas
         tem_lco = "lco" in extensoes_enviadas or "ctr" in extensoes_enviadas
@@ -647,8 +598,7 @@ with aba5:
 
         st.markdown("---")
         st.markdown("#### 🗺️ Fluxograma de Dependência e Integridade Referencial")
-        st.caption("Nós em verde indicam arquivos presentes no lote. Nós em vermelho indicam ausência e quebra potencial de integridade referencial.")
-
+        
         codigo_mermaid = f"""
         graph TD
             BAS["Cadastros Básicos / Orçamento (.BAS)"]:::estBas
@@ -680,13 +630,13 @@ with aba5:
             
             erros_oficiais = []
             if not tem_bas:
-                erros_oficiais.append("[ERR-BAS-001] ERRO CRÍTICO: Arquivo de Cadastros Básicos (.BAS) ausente na remessa. Rejeição automática de todos os módulos dependentes.")
+                erros_oficiais.append("[ERR-BAS-001] ERRO CRÍTICO: Arquivo de Cadastros Básicos (.BAS) ausente na remessa.")
             if not tem_lic and tem_lco:
                 erros_oficiais.append("[ERR-LIC-404] INCONSISTÊNCIA REFERENCIAL: O módulo de Contratos (.LCO) foi enviado sem o respectivo arquivo de Licitações (.LIC) pré-requisito.")
 
             for err_msg in erros_oficiais:
                 st.code(err_msg, language="text")
         else:
-            st.success("✨ Lote validado com sucesso! Nenhuma quebra de dependência estrutural identificada entre Licitações e Contratos.")
+            st.success("✨ Lote validado com sucesso! Nenhuma quebra de dependência estrutural identificada.")
     else:
         st.info("💡 Faça o upload dos arquivos da competência acima para gerar o fluxograma interativo, métricas e validação de competência.")
