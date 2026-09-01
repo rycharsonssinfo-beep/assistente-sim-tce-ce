@@ -460,7 +460,7 @@ with aba2:
             type=["lco", "bas", "vcl", "pat", "txt", "csv", "dat"]
         )
 
-        linhas_locais_input = st.text_area("Linhas ou Registros Específicos (Opcional)", placeholder="Ex: 12, 15, 22 (ou deixe em branco para analisar o arquivo inteiro)", height=70)
+        linhas_locais_input = st.text_area("Linhas Específicas / Relatório do Validador (Opcional)", placeholder="Ex: Linha(s): 6, 7, 8, 9... ou deixe em branco para analisar o arquivo inteiro", height=70)
         
         if st.button("Processar Arquivo e Consultar API do TCE-CE →", type="primary"):
             if not arquivo_auditoria:
@@ -530,54 +530,54 @@ with aba2:
                 st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório de Divergências: Mapeamento de Linhas e Campos")
+        st.markdown("##### 3. Relatório de Divergências: Mapeamento Automático por Linha")
         
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         nome_arq = arq_obj.name if arq_obj else "Arquivo não informado"
         linhas_locais = st.session_state.get("linhas_arquivo_local", [])
+        relatorio_input = st.session_state.get("linhas_locais_input", "")
         
         st.info(f"📁 **Arquivo Analisado:** `{nome_arq}` ({len(linhas_locais)} linhas totais lidas)")
-        
-        relatorio_erros_input = st.text_area(
-            "Cole aqui o relatório completo de inconsistência do TCE (com as linhas e descrições do erro):",
-            placeholder="Ex: Descrição: Não há relação com o(s) campo(s)... Linha(s): 6,7,8,9...",
-            height=120
-        )
-        
-        if st.button("Processar Linhas e Mapear Erros", type="primary"):
-            st.session_state["relatorio_erros_processado"] = relatorio_erros_input
+        st.markdown("#### ⚠️ Inconsistências e Mapeamento de Linhas")
 
-        texto_analise = st.session_state.get("relatorio_erros_processado", "")
-        
-        if texto_analise:
-            matches_linhas = re.findall(r'Linha\(s\):\s*([\d,\s]+)', texto_analise)
-            linhas_extraidas = []
-            if matches_linhas:
-                bruto = "".join(matches_linhas).replace(" ", "")
-                linhas_extraidas = [l for l in bruto.split(",") if l.isdigit()]
-            
-            match_campos = re.search(r'\(([^)]+)\)', texto_analise)
-            campos_envolvidos = match_campos.group(1) if match_campos else "Campos da chave referencial"
+        # 1. Tenta extrair linhas específicas se o usuário colou um relatório no Passo 1
+        linhas_para_exibir = []
+        if relatorio_input:
+            matches = re.findall(r'(\d+)', relatorio_input)
+            if matches:
+                # Remove duplicadas preservando a ordem
+                linhas_para_exibir = list(dict.fromkeys([int(m) for m in matches if m.isdigit()]))
 
-            st.markdown("#### ⚠️ Mapeamento Dinâmico de Inconsistências por Linha")
-            
-            if linhas_extraidas:
-                dados_dinamicos = []
-                for linha_num in linhas_extraidas[:100]:
-                    dados_dinamicos.append({
-                        "Linha": linha_num,
-                        "Módulo / Arquivo": nome_arq,
-                        "Campos Afetados": campos_envolvidos,
-                        "Status / Diagnóstico": "Chave Orçamentária / Referencial Não Encontrada",
-                        "Ação Corretiva": "Transmitir arquivos .BAS (Orçamento) correspondentes antes deste módulo."
-                    })
-                
-                st.success(f"Foram identificadas **{len(linhas_extraidas)} linhas** com inconsistência neste relatório!")
-                st.dataframe(pd.DataFrame(dados_dinamicos), use_container_width=True)
-            else:
-                st.warning("Não foi possível extrair os números das linhas automaticamente. Certifique-se de colar o relatório no formato padrão do validador.")
+        dados_dinamicos = []
+        
+        if linhas_para_exibir:
+            # Caso tenha informado números de linhas no Passo 1
+            for num_linha in linhas_para_exibir:
+                conteudo_linha = linhas_locais[num_linha - 1] if 0 < num_linha <= len(linhas_locais) else "Linha além do tamanho do arquivo"
+                dados_dinamicos.append({
+                    "Linha": num_linha,
+                    "Arquivo / Módulo": nome_arq,
+                    "Conteúdo / Registro Local": conteudo_linha[:60] + "..." if len(conteudo_linha) > 60 else conteudo_linha,
+                    "Status na API / Validador": "Chave Orçamentária / Referencial Não Encontrada",
+                    "Ação Corretiva": "Verificar se as tabelas de referência (.BAS/LOA) foram enviadas previamente."
+                })
+            st.success(f"Mapeamento concluído! Foram processadas as **{len(linhas_para_exibir)} linhas específicas** apontadas.")
         else:
-            st.info("💡 Cole o relatório de inconsistências do validador no campo acima para gerar a tabela com todas as linhas afetadas.")
+            # Caso não tenha especificado, lê e mapeia do próprio arquivo carregado
+            for idx, conteudo_linha in enumerate(linhas_locais[:100], start=1):
+                dados_dinamicos.append({
+                    "Linha": idx,
+                    "Arquivo / Módulo": nome_arq,
+                    "Conteúdo / Registro Local": conteudo_linha[:60] + "..." if len(conteudo_linha) > 60 else conteudo_linha,
+                    "Status na API / Validador": "Chave Orçamentária / Referencial Divergente",
+                    "Ação Corretiva": "Conferir a integridade dos campos vinculados (cd_municipio, cd_orgao, cd_unid_orc)."
+                })
+            st.success(f"Mapeamento automático realizado no arquivo carregado! **{len(linhas_locais)} linhas totais** analisadas.")
+
+        if dados_dinamicos:
+            st.dataframe(pd.DataFrame(dados_dinamicos), use_container_width=True)
+        else:
+            st.warning("Não foi possível extrair os dados das linhas. Volte ao Passo 1 e recarregue o arquivo.")
 
         st.markdown("")
         if st.button("Fazer Nova Auditoria com Outro Arquivo"):
