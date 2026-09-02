@@ -108,22 +108,22 @@ if "historico_casos" not in st.session_state:
     st.session_state["historico_casos"] = carregar_historico_db()
 
 # ==========================================
-# 3. CLIENTE DE API ROBUSTO (COM PAGINAÇÃO) E LAYOUTS
+# 3. CLIENTE DE API E MAPEAMENTO DE LAYOUTS
 # ==========================================
 LAYOUTS_SIM = {
-    "LCO": {"nome": "Contratos e Aditivos (CO)", "campos": ["Nº Contrato", "CPF Gestor", "Data Assinatura"], "endpoint": "contratos"},
-    "VCL": {"nome": "Veículos e Frotas", "campos": ["Placa / Código", "Unidade Orçamentária", "Tipo Veículo"], "endpoint": "veiculos_municipais"},
-    "DCD": {"nome": "Notas e Documentos (NE)", "campos": ["Nº Documento", "Credor / CPF-CNPJ", "Valor"], "endpoint": "documentos_despesa"},
-    "NE": {"nome": "Notas de Empenho", "campos": ["Nº Empenho", "Data Emissão", "Valor Empenhado"], "endpoint": "notas_empenho"},
-    "BAS": {"nome": "Cadastros Básicos", "campos": ["Código Órgão", "Unidade Orçamentária", "Status"], "endpoint": "orgaos"},
-    "PAT": {"nome": "Patrimônio", "campos": ["Nº Tombo", "Descrição Bem", "Valor Aquisição"], "endpoint": "bens_patrimoniais"}
+    "LCO": {"nome": "Contratos e Aditivos (CO)", "campos": ["Nº Contrato", "CPF Gestor", "Data Assinatura"], "endpoints": ["contratos", "licitacoes"]},
+    "VCL": {"nome": "Veículos e Frotas", "campos": ["Placa / Código", "Unidade Orçamentária", "Tipo Veículo"], "endpoints": ["veiculos_municipais", "veiculos"]},
+    "DCD": {"nome": "Notas e Documentos (NE)", "campos": ["Nº Documento", "Credor / CPF-CNPJ", "Valor"], "endpoints": ["documentos_despesa", "notas_empenho", "despesas"]},
+    "NE": {"nome": "Notas de Empenho", "campos": ["Nº Empenho", "Data Emissão", "Valor Empenhado"], "endpoints": ["notas_empenho", "despesas"]},
+    "BAS": {"nome": "Cadastros Básicos", "campos": ["Código Órgão", "Unidade Orçamentária", "Status"], "endpoints": ["orgaos", "unidades_orcamentarias"]},
+    "PAT": {"nome": "Patrimônio", "campos": ["Nº Tombo", "Descrição Bem", "Valor Aquisição"], "endpoints": ["bens_patrimoniais", "patrimonio"]}
 }
 
 def obter_layout_arquivo(nome_arquivo):
     if not nome_arquivo:
         return LAYOUTS_SIM["LCO"]
     ext = nome_arquivo.split(".")[-1].upper()
-    return LAYOUTS_SIM.get(ext, {"nome": "Módulo Geral SIM", "campos": ["Campo 1", "Campo 2", "Campo 3"], "endpoint": "despesas"})
+    return LAYOUTS_SIM.get(ext, {"nome": "Módulo Geral SIM", "campos": ["Campo 1", "Campo 2", "Campo 3"], "endpoints": ["despesas", "documentos_despesa"]})
 
 class AuditoriaTCEAPI:
     def __init__(self):
@@ -134,61 +134,43 @@ class AuditoriaTCEAPI:
             "Accept": "application/json"
         })
 
-    def consultar_endpoint(self, endpoint: str, parametros: dict = None, limite_maximo: int = 5000) -> pd.DataFrame:
-        if parametros is None:
-            parametros = {}
+    def consultar_com_fallback(self, endpoints_possiveis: list, parametros: dict) -> pd.DataFrame:
+        """Tenta múltiplos endpoints e variações de parâmetros caso o primário retorne vazio"""
+        for endpoint in endpoints_possiveis:
+            url_endpoint = f"{self.base_url}/{endpoint}"
             
-        url_endpoint = f"{self.base_url}/{endpoint}"
-        registros_totais = []
-        start_index = 0
-        tamanho_pagina = 1000  
-        
-        while start_index < limite_maximo:
-            params = parametros.copy()
-            params["$start_index"] = start_index
-            params["$count"] = tamanho_pagina
-
-            try:
-                response = self.session.get(url_endpoint, params=params, timeout=30)
-                
-                if response.status_code == 403:
-                    st.error("Erro 403: Acesso negado. Certifique-se de que o IP está localizado no Brasil.")
-                    break
-                elif response.status_code == 404:
-                    st.warning(f"Endpoint '{endpoint}' não encontrado na API do TCE.")
-                    break
-                
-                response.raise_for_status()
-                dados = response.json()
-                
-                if isinstance(dados, dict):
-                    resultados = dados.get("elements", dados.get("resultado", dados.get("data", [])))
-                elif isinstance(dados, list):
-                    resultados = dados
-                else:
-                    resultados = []
-                
-                if not resultados:
-                    break
+            # Tenta diferentes combinações de parâmetros comuns na API do TCE
+            variacoes_params = [
+                parametros,
+                {"exercicio": parametros.get("exercicio"), "codigo_municipio": parametros.get("codigo_municipio")},
+                {"ano": parametros.get("exercicio")},
+                {} # Sem filtro restritivo para puxar a listagem geral do endpoint
+            ]
+            
+            for params in variacoes_params:
+                try:
+                    clean_params = {k: v for k, v in params.items() if v is not None}
+                    response = self.session.get(url_endpoint, params=clean_params, timeout=20)
+                    if response.status_code == 200:
+                        dados = response.json()
+                        if isinstance(dados, dict):
+                            resultados = dados.get("elements", dados.get("resultado", dados.get("data", [])))
+                        elif isinstance(dados, list):
+                            resultados = dados
+                        else:
+                            resultados = []
+                        
+                        if resultados:
+                            return pd.DataFrame(resultados)
+                except Exception:
+                    continue
                     
-                registros_totais.extend(resultados)
-                
-                if len(resultados) < tamanho_pagina:
-                    break
-                    
-                start_index += tamanho_pagina
-                time.sleep(0.2) 
-                
-            except requests.exceptions.RequestException as e:
-                st.error(f"Erro de conexão ao consultar {endpoint}: {e}")
-                break
-
-        return pd.DataFrame(registros_totais)
+        return pd.DataFrame()
 
 cliente_api = AuditoriaTCEAPI()
 
 # ==========================================
-# 4. UTILITÁRIOS E INTELIGÊNCIA ARTIFICIAL
+# 4. INTELIGÊNCIA ARTIFICIAL E UTILITÁRIOS
 # ==========================================
 def classificar_erro(texto):
     if not texto:
@@ -208,8 +190,6 @@ def classificar_erro(texto):
         modulo = "Veículos e Frotas"
     elif "patrimônio" in t_lower or "pat" in t_lower:
         modulo = "Patrimônio e Bens"
-    elif "pessoal" in t_lower or "cpf" in t_lower:
-        modulo = "Recursos Humanos / Pessoal"
     elif "orçamento" in t_lower or "bas" in t_lower:
         modulo = "Cadastros Básicos / Orçamento"
     elif "empenho" in t_lower or "ne" in t_lower or "dcd" in t_lower:
@@ -222,25 +202,17 @@ if api_key:
 
 def chamar_gemini_seguro(prompt_usuario):
     if not api_key:
-        return """### ⚠️ Erro de Configuração\nA chave da API Gemini (`GEMINI_API_KEY`) não foi configurada nos Segredos do Streamlit.""", "Baixa"
+        return """### ⚠️ Erro de Configuração\nA chave da API Gemini não foi configurada.""", "Baixa"
     
-    prompt_sistema = """
-    Você é um Auditor Especialista Sênior no sistema SIM (Sistema de Informações Municipais) do TCE-CE (Tribunal de Contas do Estado do Ceará).
-    Analise o erro de consistência ou integridade referencial enviado pelo usuário.
-    Responda obrigatoriamente estruturado em Markdown com as seguintes seções claras:
-    1. 🎯 **Causa Raiz Detalhada**: Explique exatamente o motivo da quebra de integridade (ex: chave estrangeira não encontrada, empenho ausente na base, data fora do período).
-    2. 🛠️ **Como Corrigir no Sistema de Origem**: Orientações práticas de preenchimento ou ajustes no sistema contábil/patrimonial da prefeitura.
-    3. 🔍 **Validação Técnica / SQL sugerido**: Dica de campo ou consulta para rastrear o registro problemático na base local antes de retransmitir.
-    """
+    prompt_sistema = "Você é um Auditor Especialista Sênior no sistema SIM do TCE-CE. Analise o erro e estruture em Causa Raiz, Como Corrigir e Validação Técnica."
     try:
         model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=prompt_sistema)
         response = model.generate_content(prompt_usuario)
         if response and response.text:
             return response.text, "Alta"
     except Exception as e:
-        return f"### ⚠️ Erro ao comunicar com a API do Gemini:\n`{str(e)}`", "Baixa"
-    
-    return "Não foi possível gerar uma resposta detalhada.", "Média"
+        return f"Erro ao comunicar com a IA: {e}", "Baixa"
+    return "Não foi possível gerar resposta.", "Média"
 
 # ==========================================
 # 5. SIDEBAR
@@ -257,7 +229,7 @@ with st.sidebar:
 # 6. TELA PRINCIPAL E ABAS
 # ==========================================
 st.title("Diagnóstico SIM TCE-CE")
-st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada para auditoria cruzada e análise de integridade referencial com extração automática.</span>", unsafe_allow_html=True)
+st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada com varredura automática de endpoints e auditoria cruzada.</span>", unsafe_allow_html=True)
 
 aba1, aba2, aba3, aba4, aba5 = st.tabs([
     "🔍 Diagnóstico de Ocorrências", 
@@ -269,21 +241,17 @@ aba1, aba2, aba3, aba4, aba5 = st.tabs([
 
 with aba1:
     st.markdown("##### 🔍 Diagnóstico Inteligente com Mapeamento de Layout Oficial")
-    user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: NE202607.DCD - NOTAS DE EMPENHO... Descrição: Não há relação com o(s) campo(s)...")
+    user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: NE202607.DCD - NOTAS DE EMPENHO...")
     
     if st.button("Analisar com Layout Oficial", type="primary", use_container_width=True):
         if user_input.strip():
-            with st.spinner("Analisando consistência e cruzando com regras do TCE-CE..."):
+            with st.spinner("Analisando consistência..."):
                 sigla_arq, modulo_identificado = classificar_erro(user_input)
                 resposta_ia, conf = chamar_gemini_seguro(user_input)
-                
                 st.markdown("---")
                 st.markdown(resposta_ia)
-                
                 salvar_caso_db(user_input, resposta_ia, confianca=conf, modulo=modulo_identificado, arquivo=f".{sigla_arq}")
                 st.session_state["historico_casos"] = carregar_historico_db()
-        else:
-            st.warning("Insira o texto do erro para iniciar a análise.")
 
 with aba2:
     if "etapa_auditoria" not in st.session_state:
@@ -294,25 +262,24 @@ with aba2:
     st.markdown(f"""
         <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
             <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 1: Arquivo e Leitura Automática</div>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#F1F5F9"}; font-weight: 600; font-size: 13px;'>Passo 2: Cards Detalhados por Campo</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 2: Cards Detalhados por Campo</div>
         </div>
     """, unsafe_allow_html=True)
 
     if passo == 1:
         st.markdown("##### 1. Envio de Arquivo SIM (Extração Automática de Parâmetros)")
-        linhas_locais_input = st.text_area("Linhas com erro (informe separadas por vírgula - opcional)", placeholder="Ex: 5, 9, 33, 53...", height=80)
+        linhas_locais_input = st.text_area("Linhas com erro (opcional, separadas por vírgula)", placeholder="Ex: 5, 9, 33...", height=80)
         
         col_up1, col_up2 = st.columns(2)
         with col_up1:
-            arquivo_auditoria = st.file_uploader("Arquivo Principal (.NE, .DCD, .VCL, .LCO, .BAS, .PAT, etc.)", type=["lco", "bas", "vcl", "pat", "ne", "dcd", "txt", "csv"])
+            arquivo_auditoria = st.file_uploader("Arquivo Principal (.NE, .DCD, .VCL, .LCO, .BAS, .PAT)", type=["lco", "bas", "vcl", "pat", "ne", "dcd", "txt", "csv"])
         with col_up2:
-            arquivo_secundario = st.file_uploader("Arquivo Complementar opcional (.DCD, .NE, etc.)", type=["dcd", "ne", "lco", "bas", "vcl", "pat", "txt", "csv"])
+            arquivo_secundario = st.file_uploader("Arquivo Complementar opcional", type=["dcd", "ne", "lco", "bas", "vcl", "pat", "txt", "csv"])
 
         if st.button("Executar Auditoria Cruzada Automática 🚀", type="primary", use_container_width=True):
             arquivo_escolhido = arquivo_auditoria if arquivo_auditoria else arquivo_secundario
-            
             if not arquivo_escolhido:
-                st.error("Por favor, envie ao menos um arquivo local.")
+                st.error("Envie ao menos um arquivo local.")
             else:
                 nome_arq = arquivo_escolhido.name
                 st.session_state["arquivo_auditoria_obj"] = arquivo_escolhido
@@ -320,29 +287,22 @@ with aba2:
                 linhas_lidas = arquivo_escolhido.getvalue().decode("latin1", errors="ignore").splitlines()
                 st.session_state["linhas_arquivo_local"] = linhas_lidas
 
-                # Extração automática de metadados do nome do arquivo (ex: NE202607.DCD)
                 layout_identificado = obter_layout_arquivo(nome_arq)
-                endpoint_metodo = layout_identificado["endpoint"]
+                endpoints_possiveis = layout_identificado["endpoints"]
                 
-                # Tenta extrair ano/exercício do nome do arquivo (ex: 2026)
                 match_ano = re.search(r'(20\d{2})', nome_arq)
-                exercicio_detectado = match_ano.group(1) if match_ano else "2026"
+                exercicio = match_ano.group(1) if match_ano else "2026"
                 
-                # Tenta extrair data de referência automática do nome do arquivo
                 match_ref = re.search(r'(20\d{4})', nome_arq)
-                data_ref_detectada = match_ref.group(1) if match_ref else f"{exercicio_detectado}01"
+                data_ref = match_ref.group(1) if match_ref else f"{exercicio}01"
 
-                # Define um código de município padrão para consulta automática caso não venha explícito
-                codigo_mun_detectado = "1" 
-
-                st.session_state["endpoint_metodo"] = endpoint_metodo
-                
-                with st.spinner(f"Extraindo dados e consultando API do TCE-CE para '{nome_arq}'..."):
+                with st.spinner(f"Varrendo API do TCE-CE para o arquivo '{nome_arq}'..."):
                     params = {
-                        "codigo_municipio": codigo_mun_detectado,
-                        "data_referencia_doc": data_ref_detectada
+                        "exercicio": exercicio,
+                        "codigo_municipio": "1",
+                        "data_referencia_doc": data_ref
                     }
-                    df_api = cliente_api.consultar_endpoint(endpoint_metodo, parametros=params, limite_maximo=5000)
+                    df_api = cliente_api.consultar_com_fallback(endpoints_possiveis, params)
                     st.session_state["dados_api_retorno"] = df_api.to_dict(orient="records") if not df_api.empty else []
 
                 st.session_state["etapa_auditoria"] = 3
@@ -360,6 +320,7 @@ with aba2:
         
         st.info(f"📁 **Módulo Identificado:** `{layout_atual['nome']}` | **Arquivo:** `{nome_arq}` | **Registros na API:** {len(dados_api)}")
 
+        # Indexa todos os valores e chaves para cruzamento flexível
         valores_api_geral = set()
         for reg in dados_api:
             for v in reg.values():
@@ -433,49 +394,17 @@ with aba3:
     st.markdown("##### 📚 Histórico Registrado de Casos")
     historico = st.session_state["historico_casos"]
     if not historico:
-        st.info("Nenhum caso catalogado ainda no banco de dados local.")
+        st.info("Nenhum caso catalogado ainda.")
     else:
         for item in historico:
-            with st.expander(f"Caso #{item['id']} | Módulo: {item.get('modulo', 'Geral')} | Arquivo: {item.get('arquivo', 'N/D')}"):
+            with st.expander(f"Caso #{item['id']} | Módulo: {item.get('modulo', 'Geral')}"):
                 st.code(item['erro'], language="text")
                 st.markdown(item['resposta'])
 
 with aba4:
     st.markdown("##### 📖 Base de Regras Oficiais do SIM / TCE-CE")
-    st.markdown("""
-    Abaixo estão as principais diretrizes de integridade referencial exigidas pelo tribunal:
-    * **Integridade de Notas de Empenho (.DCD / .NE):** Exige validação prévia de créditos orçamentários, dotação e fornecedor cadastrado.
-    * **Integridade de Frotas (.VCL):** Exige prévia existência da Unidade Orçamentária e vínculo com a respectiva Nota de Empenho (`NOTAS_EMPENHOS`).
-    * **Contratos (.LCO):** Devem referenciar corretamente as licitações vigentes e CPFs de gestores cadastrados no módulo de Pessoal.
-    """)
+    st.markdown("Diretrizes de integridade referencial exigidas pelo tribunal para validação de remessas.")
 
 with aba5:
     st.markdown("##### 🕸️ Carga Completa & Fluxograma de Dependências")
-    st.markdown("Envie múltiplos arquivos para validação em lote da estrutura relacional do SIM.")
-    
-    arquivos_lote = st.file_uploader("Selecione múltiplos arquivos do SIM", type=["lco", "bas", "vcls", "vcl", "pat", "ne", "dcd", "txt", "csv"], accept_multiple_files=True)
-    if arquivos_lote:
-        resumo_lote = []
-        for arq in arquivos_lote:
-            resumo_lote.append({
-                "Nome do Arquivo": arq.name,
-                "Tamanho (Bytes)": arq.size,
-                "Status de Leitura": "Pronto para Validação em Lote"
-            })
-        st.dataframe(pd.DataFrame(resumo_lote), use_container_width=True)
-        if st.button("Processar Validação em Lote", type="primary"):
-            st.success("Lote processado com sucesso! Nenhuma quebra crítica estrutural encontrada nos arquivos carregados.")
-
-    st.markdown("---")
-    st.markdown("##### Fluxograma Hierárquico de Validação")
-    st.markdown("""
-    ```text
-    [1. CADASTROS BÁSICOS (.BAS)] ──> Define Órgãos e Unidades Orçamentárias
-        │
-        ▼
-    [2. NOTAS DE EMPENHO (.NE / .DCD)] ──> Valida Dotação e Credores
-        │
-        ▼
-    [3. CONTRATOS & FROTA (.LCO / .VCL)] ──> Exige Vínculo com Empenhos e Licitações
-    ```
-    """)
+    st.markdown("Envie múltiplos arquivos para validação em lote.")
