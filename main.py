@@ -111,19 +111,19 @@ if "historico_casos" not in st.session_state:
 # 3. CLIENTE DE API ROBUSTO (COM PAGINAÇÃO) E LAYOUTS
 # ==========================================
 LAYOUTS_SIM = {
-    "LCO": {"nome": "Contratos e Aditivos (CO)", "campos": ["Nº Contrato", "CPF Gestor", "Data Assinatura"]},
-    "VCL": {"nome": "Veículos e Frotas", "campos": ["Placa / Código", "Unidade Orçamentária", "Tipo Veículo"]},
-    "DCD": {"nome": "Notas e Documentos (NE)", "campos": ["Nº Documento", "Credor / CPF-CNPJ", "Valor"]},
-    "NE": {"nome": "Notas de Empenho", "campos": ["Nº Empenho", "Data Emissão", "Valor Empenhado"]},
-    "BAS": {"nome": "Cadastros Básicos", "campos": ["Código Órgão", "Unidade Orçamentária", "Status"]},
-    "PAT": {"nome": "Patrimônio", "campos": ["Nº Tombo", "Descrição Bem", "Valor Aquisição"]}
+    "LCO": {"nome": "Contratos e Aditivos (CO)", "campos": ["Nº Contrato", "CPF Gestor", "Data Assinatura"], "endpoint": "contratos"},
+    "VCL": {"nome": "Veículos e Frotas", "campos": ["Placa / Código", "Unidade Orçamentária", "Tipo Veículo"], "endpoint": "veiculos_municipais"},
+    "DCD": {"nome": "Notas e Documentos (NE)", "campos": ["Nº Documento", "Credor / CPF-CNPJ", "Valor"], "endpoint": "documentos_despesa"},
+    "NE": {"nome": "Notas de Empenho", "campos": ["Nº Empenho", "Data Emissão", "Valor Empenhado"], "endpoint": "notas_empenho"},
+    "BAS": {"nome": "Cadastros Básicos", "campos": ["Código Órgão", "Unidade Orçamentária", "Status"], "endpoint": "orgaos"},
+    "PAT": {"nome": "Patrimônio", "campos": ["Nº Tombo", "Descrição Bem", "Valor Aquisição"], "endpoint": "bens_patrimoniais"}
 }
 
 def obter_layout_arquivo(nome_arquivo):
     if not nome_arquivo:
         return LAYOUTS_SIM["LCO"]
     ext = nome_arquivo.split(".")[-1].upper()
-    return LAYOUTS_SIM.get(ext, {"nome": "Módulo Geral SIM", "campos": ["Campo 1", "Campo 2", "Campo 3"]})
+    return LAYOUTS_SIM.get(ext, {"nome": "Módulo Geral SIM", "campos": ["Campo 1", "Campo 2", "Campo 3"], "endpoint": "despesas"})
 
 class AuditoriaTCEAPI:
     def __init__(self):
@@ -155,7 +155,7 @@ class AuditoriaTCEAPI:
                     st.error("Erro 403: Acesso negado. Certifique-se de que o IP está localizado no Brasil.")
                     break
                 elif response.status_code == 404:
-                    st.warning(f"Endpoint '{endpoint}' não encontrado.")
+                    st.warning(f"Endpoint '{endpoint}' não encontrado na API do TCE.")
                     break
                 
                 response.raise_for_status()
@@ -257,7 +257,7 @@ with st.sidebar:
 # 6. TELA PRINCIPAL E ABAS
 # ==========================================
 st.title("Diagnóstico SIM TCE-CE")
-st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada para auditoria cruzada e análise de integridade referencial com paginação otimizada.</span>", unsafe_allow_html=True)
+st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada para auditoria cruzada e análise de integridade referencial com extração automática.</span>", unsafe_allow_html=True)
 
 aba1, aba2, aba3, aba4, aba5 = st.tabs([
     "🔍 Diagnóstico de Ocorrências", 
@@ -293,94 +293,63 @@ with aba2:
     
     st.markdown(f"""
         <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 1: Linhas e Arquivo Local</div>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==2 else "#F1F5F9"}; color: {"white" if passo==2 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 2: Parâmetros e API SIM</div>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 3: Cards Detalhados por Campo</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 1: Arquivo e Leitura Automática</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#F1F5F9"}; font-weight: 600; font-size: 13px;'>Passo 2: Cards Detalhados por Campo</div>
         </div>
     """, unsafe_allow_html=True)
 
     if passo == 1:
-        st.markdown("##### 1. Linhas com Erro e Envio de Arquivos SIM")
-        linhas_locais_input = st.text_area("Linhas com erro (informe separadas por vírgula)", placeholder="Ex: 5, 9, 33, 53, 74...", height=100)
+        st.markdown("##### 1. Envio de Arquivo SIM (Extração Automática de Parâmetros)")
+        linhas_locais_input = st.text_area("Linhas com erro (informe separadas por vírgula - opcional)", placeholder="Ex: 5, 9, 33, 53...", height=80)
         
         col_up1, col_up2 = st.columns(2)
         with col_up1:
-            arquivo_auditoria = st.file_uploader("Arquivo Principal (.VCL, .LCO, .BAS, .PAT, .NE, .DCD, etc.)", type=["lco", "bas", "vcl", "pat", "ne", "dcd", "txt", "csv"])
+            arquivo_auditoria = st.file_uploader("Arquivo Principal (.NE, .DCD, .VCL, .LCO, .BAS, .PAT, etc.)", type=["lco", "bas", "vcl", "pat", "ne", "dcd", "txt", "csv"])
         with col_up2:
             arquivo_secundario = st.file_uploader("Arquivo Complementar opcional (.DCD, .NE, etc.)", type=["dcd", "ne", "lco", "bas", "vcl", "pat", "txt", "csv"])
 
-        if st.button("Avançar para Parâmetros da API →", type="primary"):
+        if st.button("Executar Auditoria Cruzada Automática 🚀", type="primary", use_container_width=True):
             arquivo_escolhido = arquivo_auditoria if arquivo_auditoria else arquivo_secundario
             
             if not arquivo_escolhido:
-                st.error("Por favor, envie ao menos um arquivo local (principal ou complementar).")
+                st.error("Por favor, envie ao menos um arquivo local.")
             else:
+                nome_arq = arquivo_escolhido.name
                 st.session_state["arquivo_auditoria_obj"] = arquivo_escolhido
                 st.session_state["linhas_locais_input"] = linhas_locais_input
-                st.session_state["linhas_arquivo_local"] = arquivo_escolhido.getvalue().decode("latin1", errors="ignore").splitlines()
-                st.session_state["etapa_auditoria"] = 2
+                linhas_lidas = arquivo_escolhido.getvalue().decode("latin1", errors="ignore").splitlines()
+                st.session_state["linhas_arquivo_local"] = linhas_lidas
+
+                # Extração automática de metadados do nome do arquivo (ex: NE202607.DCD)
+                layout_identificado = obter_layout_arquivo(nome_arq)
+                endpoint_metodo = layout_identificado["endpoint"]
+                
+                # Tenta extrair ano/exercício do nome do arquivo (ex: 2026)
+                match_ano = re.search(r'(20\d{2})', nome_arq)
+                exercicio_detectado = match_ano.group(1) if match_ano else "2026"
+                
+                # Tenta extrair data de referência automática do nome do arquivo
+                match_ref = re.search(r'(20\d{4})', nome_arq)
+                data_ref_detectada = match_ref.group(1) if match_ref else f"{exercicio_detectado}01"
+
+                # Define um código de município padrão para consulta automática caso não venha explícito
+                codigo_mun_detectado = "1" 
+
+                st.session_state["endpoint_metodo"] = endpoint_metodo
+                
+                with st.spinner(f"Extraindo dados e consultando API do TCE-CE para '{nome_arq}'..."):
+                    params = {
+                        "codigo_municipio": codigo_mun_detectado,
+                        "data_referencia_doc": data_ref_detectada
+                    }
+                    df_api = cliente_api.consultar_endpoint(endpoint_metodo, parametros=params, limite_maximo=5000)
+                    st.session_state["dados_api_retorno"] = df_api.to_dict(orient="records") if not df_api.empty else []
+
+                st.session_state["etapa_auditoria"] = 3
                 st.rerun()
-
-    elif passo == 2:
-        st.markdown("##### 2. Configurar Parâmetros Obrigatórios da API TCE-CE")
-        
-        col_c1, col_c2 = st.columns(2)
-        with col_c1:
-            endpoint_metodo = st.selectbox(
-                "Recurso / Endpoint Oficial da API", 
-                [
-                    "notas_empenho", 
-                    "empenhos", 
-                    "documentos_despesa", 
-                    "despesas", 
-                    "contratos",
-                    "licitacoes",
-                    "aditivos_contratos",
-                    "unidades_orcamentarias",
-                    "orgaos",
-                    "fontes_recursos",
-                    "bens_patrimoniais",
-                    "veiculos_municipais", 
-                    "veiculos_locados"
-                ]
-            )
-        with col_c2:
-            exercicio_api = st.selectbox("Exercício (Ano)", ["2026", "2025", "2024"], index=0)
-
-        col_p1, col_p2 = st.columns(2)
-        with col_p1:
-            codigo_municipio = st.text_input("Código do Município (Obrigatório *)", placeholder="Ex: 123")
-        with col_p2:
-            data_referencia_doc = st.text_input("Data de Referência da Doc. (Obrigatório * ex: 202601)", placeholder="Ex: 202601")
-
-        col_b1, col_b2 = st.columns([1, 4])
-        with col_b1:
-            if st.button("← Voltar"):
-                st.session_state["etapa_auditoria"] = 1
-                st.rerun()
-        with col_b2:
-            if st.button("Consultar API & Executar Cruzamento", type="primary"):
-                if not codigo_municipio.strip() or not data_referencia_doc.strip():
-                    st.error("Preencha o código do município e a data de referência.")
-                else:
-                    st.session_state["endpoint_metodo"] = endpoint_metodo
-                    st.session_state["exercicio_api"] = exercicio_api
-                    st.session_state["codigo_municipio"] = codigo_municipio.strip()
-                    st.session_state["data_referencia_doc"] = data_referencia_doc.strip()
-                    
-                    with st.spinner("Consultando API real do TCE-CE com paginação..."):
-                        params = {
-                            "codigo_municipio": st.session_state["codigo_municipio"],
-                            "data_referencia_doc": st.session_state["data_referencia_doc"]
-                        }
-                        df_api = cliente_api.consultar_endpoint(endpoint_metodo, parametros=params, limite_maximo=5000)
-                        st.session_state["dados_api_retorno"] = df_api.to_dict(orient="records") if not df_api.empty else []
-                    
-                    st.session_state["etapa_auditoria"] = 3
-                    st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório Detalhado: Comparação Campo a Campo")
+        st.markdown("##### 2. Relatório Detalhado: Comparação Campo a Campo")
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         nome_arq = arq_obj.name if arq_obj else "arquivo.lco"
         layout_atual = obter_layout_arquivo(nome_arq)
