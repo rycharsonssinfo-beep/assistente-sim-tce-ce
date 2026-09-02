@@ -6,7 +6,7 @@ import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM AVANÇADO
+# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM (DARK MODE PREMIUM)
 # ==========================================
 st.set_page_config(
     page_title="Consulta TCE - Análise de Divergências",
@@ -18,52 +18,70 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
+    /* Variáveis Globais - Dark Mode Sofisticado (SaaS / Enterprise UI) */
     :root {
-        --bg-main: #F8FAFC;
-        --surface: #FFFFFF;
-        --border-color: #E2E8F0;
-        --border-strong: #CBD5E1;
-        --text-main: #0F172A;
-        --text-muted: #64748B;
-        --primary: #059669;
-        --primary-hover: #047857;
-        --primary-light: #ECFDF5;
-        --danger-bg: #FEF2F2;
-        --danger-border: #FCA5A5;
-        --danger-text: #DC2626;
+        --bg-app: #0B0F19;
+        --surface-sidebar: #0F172A;
+        --surface-card: #111827;
+        --surface-card-hover: #1F2937;
+        --border-subtle: rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.15);
+        
+        --text-main: #F8FAFC;
+        --text-muted: #94A3B8;
+        --text-dim: #64748B;
+        
+        --accent: #3B82F6;          /* Azul corporativo moderno / Elétrico */
+        --accent-hover: #2563EB;
+        --accent-subtle: rgba(59, 130, 246, 0.12);
+        
+        --danger-bg: rgba(239, 68, 68, 0.1);
+        --danger-border: rgba(239, 68, 68, 0.3);
+        --danger-text: #F87171;
     }
 
-    .main, html, body, [class*="st-"] {
-        font-family: 'Plus Jakarta Sans', sans-serif !important;
-        background-color: var(--bg-main);
+    /* Reset global de tipografia e fundo nativo */
+    .stApp {
+        background-color: var(--bg-app);
+        font-family: 'Plus Jakarta Sans', sans-serif;
         color: var(--text-main);
     }
 
     .block-container {
         padding-top: 2rem;
         padding-bottom: 4rem;
-        max-width: 1300px;
+        max-width: 1280px;
     }
 
-    /* Títulos e Cabeçalhos modernos */
+    /* Tipografia de Cabeçalhos */
     h1, h2, h3, h4 {
-        color: var(--text-main);
+        color: var(--text-main) !important;
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
         font-weight: 700;
-        letter-spacing: -0.03em;
+        letter-spacing: -0.025em;
     }
 
-    /* Abas Modernas Estilizadas */
+    /* Sidebar Estilizada com Profundidade */
+    section[data-testid="stSidebar"] {
+        background-color: var(--surface-sidebar) !important;
+        border-right: 1px solid var(--border-subtle);
+    }
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 1.5rem;
+    }
+
+    /* Abas Nativas Estilizadas de Forma Limpa */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #F1F5F9;
+        gap: 6px;
+        background-color: var(--surface-card);
         padding: 6px;
-        border-radius: 12px;
-        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        border: 1px solid var(--border-subtle);
     }
     .stTabs [data-baseweb="tab"] {
-        height: 42px;
+        height: 38px;
         background-color: transparent;
-        border-radius: 8px;
+        border-radius: 6px;
         color: var(--text-muted);
         font-weight: 600;
         font-size: 13px;
@@ -71,66 +89,74 @@ st.markdown("""
         padding: 0 16px;
         transition: all 0.2s ease;
     }
+    .stTabs [data-baseweb="tab"]:hover {
+        color: var(--text-main);
+        background-color: rgba(255, 255, 255, 0.03);
+    }
     .stTabs [aria-selected="true"] {
-        background-color: var(--surface) !important;
-        color: var(--primary) !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        background-color: var(--accent-subtle) !important;
+        color: var(--accent) !important;
+        border: 1px solid rgba(59, 130, 246, 0.2);
     }
 
-    /* Botões Refinados */
+    /* Botões Modernos Nativos */
     .stButton button {
-        border-radius: 10px;
+        border-radius: 8px;
         font-weight: 600;
-        font-size: 14px;
+        font-size: 13px;
         border: 1px solid var(--border-strong);
-        background-color: var(--surface);
+        background-color: var(--surface-card);
         color: var(--text-main);
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        padding: 0.5rem 1rem;
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        min-height: 38px;
     }
     .stButton button:hover {
-        border-color: var(--primary);
-        color: var(--primary);
-        background-color: var(--primary-light);
+        border-color: var(--accent);
+        color: var(--accent);
+        background-color: rgba(59, 130, 246, 0.05);
     }
     .stButton button[kind="primary"] {
-        background-color: var(--primary);
-        color: white;
+        background-color: var(--accent);
+        color: #FFFFFF;
         border: none;
-        box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.2);
     }
     .stButton button[kind="primary"]:hover {
-        background-color: var(--primary-hover);
-        color: white;
-        box-shadow: 0 6px 8px -1px rgba(5, 150, 105, 0.3);
+        background-color: var(--accent-hover);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
     }
 
-    /* Sidebar Imersiva */
-    section[data-testid="stSidebar"] {
-        background-color: #F8FAFC;
-        border-right: 1px solid var(--border-color);
-        padding-top: 1rem;
+    /* Entradas de Texto e Uploaders refinados */
+    .stTextArea textarea, .stFileUploader {
+        background-color: var(--surface-card) !important;
+        border: 1px solid var(--border-strong) !important;
+        border-radius: 8px !important;
+        color: var(--text-main) !important;
+    }
+    .stTextArea textarea:focus {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 1px var(--accent) !important;
     }
 
-    /* Cards e Containers personalizados */
+    /* Cards de Auditoria Personalizados (Linhas / Divergências) */
     .audit-card {
         border: 1px solid var(--danger-border);
         padding: 16px;
-        border-radius: 12px;
-        background: var(--surface);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        transition: transform 0.2s ease;
-        min-height: 105px;
+        border-radius: 10px;
+        background: var(--surface-card);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        transition: transform 0.2s ease, border-color 0.2s ease;
     }
     .audit-card:hover {
-        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.08);
+        border-color: #F87171;
     }
 
-    /* Estilização de caixas de texto e uploaders */
-    .stTextArea textarea, .stFileUploader {
-        border-radius: 10px !important;
-        border-color: var(--border-strong) !important;
+    /* Métricas e caixas de status na Sidebar */
+    [data-testid="stMetricValue"] {
+        color: var(--text-main) !important;
+        font-weight: 700;
+    }
+    [data-testid="stMetricLabel"] {
+        color: var(--text-muted) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -269,21 +295,20 @@ with st.sidebar:
     st.caption("Painel Corporativo de Auditoria")
     st.markdown("---")
     
-    # Métrica estilizada
     st.metric(label="Casos Catalogados", value=len(st.session_state['historico_casos']))
     
     st.markdown("---")
-    st.markdown("#### ⚙️ Ações Rápidas")
-    st.download_button("📥 Exportar Backup (.JSON)", data=exportar_base_json(), file_name="backup_sim.json", mime="application/json", use_container_width=True)
+    st.markdown("#### Ações do Sistema")
+    st.download_button("Exportar Backup (.JSON)", data=exportar_base_json(), file_name="backup_sim.json", mime="application/json", use_container_width=True)
     
     st.markdown("---")
-    st.markdown("<div style='font-size: 12px; color: #64748B; text-align: center;'>Sistema Integrado Municipal<br>© 2026 TCE-CE</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size: 11px; color: #64748B; text-align: center;'>Sistema Integrado Municipal<br>© 2026 TCE-CE</div>", unsafe_allow_html=True)
 
 # ==========================================
 # 6. TELA PRINCIPAL E ABAS
 # ==========================================
 st.title("Consulta TCE - Análise de Divergências")
-st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -8px; margin-bottom: 24px;'>Plataforma unificada de auditoria inteligente de arquivos de remessa municipal.</span>", unsafe_allow_html=True)
+st.markdown("<span style='color: #94A3B8; font-size: 14px; display: block; margin-top: -6px; margin-bottom: 24px;'>Plataforma corporativa de auditoria inteligente de arquivos de remessa municipal.</span>", unsafe_allow_html=True)
 
 aba1, aba2, aba3, aba4 = st.tabs([
     "🔍 Diagnóstico de Ocorrências", 
@@ -296,7 +321,7 @@ with aba1:
     st.markdown("##### 🔍 Diagnóstico Inteligente com Mapeamento Oficial")
     user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: LCO2026.TXT - Erro na linha...")
     
-    col_btn1, col_space = st.columns([2, 5])
+    col_btn1, _ = st.columns([2, 5])
     with col_btn1:
         analisar_btn = st.button("Analisar com Layout Oficial", type="primary", use_container_width=True)
 
@@ -316,12 +341,12 @@ with aba2:
 
     passo = st.session_state["etapa_auditoria"]
     
-    # Header de etapas refinado visualmente
+    # Navegação de etapas em Dark Mode corporativo
     st.markdown(f"""
-        <div style='display: flex; gap: 12px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 14px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);'>
-            <div style='flex: 1; text-align: center; padding: 10px; border-radius: 8px; background: {"#059669" if passo==1 else "#F8FAFC"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px; border: 1px solid {"#059669" if passo==1 else "#E2E8F0"};'>1. Seleção de Linhas</div>
-            <div style='flex: 1; text-align: center; padding: 10px; border-radius: 8px; background: {"#059669" if passo==2 else "#F8FAFC"}; color: {"white" if passo==2 else "#64748B"}; font-weight: 600; font-size: 13px; border: 1px solid {"#059669" if passo==2 else "#E2E8F0"};'>2. Upload do Arquivo</div>
-            <div style='flex: 1; text-align: center; padding: 10px; border-radius: 8px; background: {"#059669" if passo==3 else "#F8FAFC"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px; border: 1px solid {"#059669" if passo==3 else "#E2E8F0"};'>3. Relatório de Divergências</div>
+        <div style='display: flex; gap: 10px; background: #111827; border: 1px solid rgba(255, 255, 255, 0.08); padding: 12px; border-radius: 10px; margin-bottom: 24px;'>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"rgba(59, 130, 246, 0.15)" if passo==1 else "transparent"}; color: {"#3B82F6" if passo==1 else "#94A3B8"}; font-weight: 600; font-size: 13px; border: 1px solid {"rgba(59, 130, 246, 0.3)" if passo==1 else "transparent"};'>1. Seleção de Linhas</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"rgba(59, 130, 246, 0.15)" if passo==2 else "transparent"}; color: {"#3B82F6" if passo==2 else "#94A3B8"}; font-weight: 600; font-size: 13px; border: 1px solid {"rgba(59, 130, 246, 0.3)" if passo==2 else "transparent"};'>2. Upload do Arquivo</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"rgba(59, 130, 246, 0.15)" if passo==3 else "transparent"}; color: {"#3B82F6" if passo==3 else "#94A3B8"}; font-weight: 600; font-size: 13px; border: 1px solid {"rgba(59, 130, 246, 0.3)" if passo==3 else "transparent"};'>3. Relatório de Divergências</div>
         </div>
     """, unsafe_allow_html=True)
 
@@ -410,7 +435,7 @@ with aba2:
                 with col_head1:
                     st.markdown(f"#### Linha {linha_num}")
                 with col_head2:
-                    st.markdown("<div style='background: #FEE2E2; color: #DC2626; padding: 5px 10px; border-radius: 8px; font-weight: 700; font-size: 11px; text-align: center; border: 1px solid #FCA5A5;'>Registro Inexistente</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='background: rgba(239, 68, 68, 0.15); color: #F87171; padding: 4px 8px; border-radius: 6px; font-weight: 700; font-size: 11px; text-align: center; border: 1px solid rgba(239, 68, 68, 0.3);'>Registro Inexistente</div>", unsafe_allow_html=True)
                 
                 nomes_colunas = layout_atual["campos"]
                 cols_ui = st.columns(len(nomes_colunas))
@@ -426,14 +451,14 @@ with aba2:
                     with col_ui:
                         st.markdown(f"""
                             <div class='audit-card'>
-                                <div style='color: #475569; font-weight: 700; font-size: 11px; letter-spacing: 0.05em; margin-bottom: 8px;'>{nome_col_atual.upper()}</div>
+                                <div style='color: #94A3B8; font-weight: 700; font-size: 11px; letter-spacing: 0.05em; margin-bottom: 8px;'>{nome_col_atual.upper()}</div>
                                 <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;'>
                                     <span style='color: #64748B;'>Arquivo:</span>
-                                    <span style='color: #DC2626; font-weight: 600;'>{v_arq}</span>
+                                    <span style='color: #F87171; font-weight: 600;'>{v_arq}</span>
                                 </div>
                                 <div style='display: flex; justify-content: space-between; font-size: 13px;'>
                                     <span style='color: #64748B;'>Histórico:</span>
-                                    <span style='color: #0F172A; font-weight: 600;'>{v_hist}</span>
+                                    <span style='color: #F8FAFC; font-weight: 600;'>{v_hist}</span>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
