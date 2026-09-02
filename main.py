@@ -365,7 +365,7 @@ with aba2:
                 st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório de Divergências: Cruzamento Robusto com a API do TCE-CE")
+        st.markdown("##### 3. Relatório de Divergências: Cruzamento Completo e Estrito de Todos os Campos")
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         nome_arq = arq_obj.name if arq_obj else "Arquivo"
         linhas_locais = st.session_state.get("linhas_arquivo_local", [])
@@ -377,31 +377,38 @@ with aba2:
         linhas_para_exibir = [int(m) for m in re.findall(r'(\d+)', relatorio_input)] if relatorio_input else []
         alvos = linhas_para_exibir if linhas_para_exibir else list(range(1, min(len(linhas_locais) + 1, 51)))
 
+        # Prepara uma lista unificada de todos os valores presentes nos registros da API para varredura estricta
+        valores_api_lista = []
+        for reg in dados_api:
+            valores_api_lista.append({str(k).lower(): str(v).strip().lower() for k, v in reg.items() if v is not None})
+
         dados_dinamicos = []
         for num_linha in alvos:
             if 0 < num_linha <= len(linhas_locais):
                 conteudo_linha = linhas_locais[num_linha - 1]
                 campos_linha = [c.strip('"').strip() for c in conteudo_linha.split(",")]
                 
-                # Validação robusta atualizada: verifica se os tokens da linha existem em qualquer campo da API
-                encontrou = False
-                if dados_api:
-                    tokens_linha = [c.lower() for c in campos_linha if len(c.strip()) > 1]
-                    for reg in dados_api:
-                        valores_reg = [str(v).lower() for v in reg.values() if v is not None]
-                        if any(token in val for token in tokens_linha for val in valores_reg):
-                            encontrou = True
-                            break
+                # Considera todos os campos significativos da linha local
+                campos_relevantes = [c.lower() for c in campos_linha if len(c.strip()) > 1]
+                
+                divergencias_encontradas = 0
 
-                if dados_api and encontrou:
-                    status_val = "✅ Compatível com os dados reais da API"
-                    acao_val = "Nenhuma ação necessária."
-                elif dados_api and not encontrou:
-                    status_val = "❌ Divergente / Não localizado na API"
-                    acao_val = "O registro inserido não confere com os dados oficiais da API."
-                else:
+                if dados_api and valores_api_lista:
+                    for campo in campos_relevantes:
+                        # Verifica estritamente se o valor exato deste campo consta em algum campo da API
+                        encontrado_no_campo = any(campo == reg_val for reg_dic in valores_api_lista for reg_val in reg_dic.values())
+                        if not encontrado_no_campo:
+                            divergencias_encontradas += 1
+
+                if not dados_api:
                     status_val = "⚠️ API Indisponível / Sem Retorno para Cruzamento"
                     acao_val = "Validar parâmetros obrigatórios (Código do Município e Data de Referência)."
+                elif divergencias_encontradas > 0:
+                    status_val = f"❌ Divergente ({divergencias_encontradas} campo(s) não conferem com a API)"
+                    acao_val = "O valor inserido nesta linha foi alterado ou não existe na base oficial do TCE-CE."
+                else:
+                    status_val = "✅ Todos os campos são compatíveis com a API"
+                    acao_val = "Nenhuma ação necessária."
 
                 dados_dinamicos.append({
                     "Linha": num_linha,
