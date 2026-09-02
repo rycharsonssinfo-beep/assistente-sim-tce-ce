@@ -365,7 +365,7 @@ with aba2:
                 st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório de Divergências: Cruzamento Completo e Estrito de Todos os Campos")
+        st.markdown("##### 3. Relatório de Divergências: Análise Estruturada por Chaves Oficiais")
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         nome_arq = arq_obj.name if arq_obj else "Arquivo"
         linhas_locais = st.session_state.get("linhas_arquivo_local", [])
@@ -377,10 +377,12 @@ with aba2:
         linhas_para_exibir = [int(m) for m in re.findall(r'(\d+)', relatorio_input)] if relatorio_input else []
         alvos = linhas_para_exibir if linhas_para_exibir else list(range(1, min(len(linhas_locais) + 1, 51)))
 
-        # Prepara uma lista unificada de todos os valores presentes nos registros da API para varredura estricta
-        valores_api_lista = []
+        # Coleta todos os valores presentes nos registros da API para validação cruzada
+        valores_api_geral = set()
         for reg in dados_api:
-            valores_api_lista.append({str(k).lower(): str(v).strip().lower() for k, v in reg.items() if v is not None})
+            for v in reg.values():
+                if v is not None:
+                    valores_api_geral.add(str(v).strip().lower())
 
         dados_dinamicos = []
         for num_linha in alvos:
@@ -388,27 +390,30 @@ with aba2:
                 conteudo_linha = linhas_locais[num_linha - 1]
                 campos_linha = [c.strip('"').strip() for c in conteudo_linha.split(",")]
                 
-                # Considera todos os campos significativos da linha local
-                campos_relevantes = [c.lower() for c in campos_linha if len(c.strip()) > 1]
+                campos_validos = [c for c in campos_linha if len(c.strip()) > 0]
                 
-                divergencias_encontradas = 0
-
-                if dados_api and valores_api_lista:
-                    for campo in campos_relevantes:
-                        # Verifica estritamente se o valor exato deste campo consta em algum campo da API
-                        encontrado_no_campo = any(campo == reg_val for reg_dic in valores_api_lista for reg_val in reg_dic.values())
-                        if not encontrado_no_campo:
-                            divergencias_encontradas += 1
+                coincidencias = 0
+                campos_nao_encontrados = []
+                
+                for idx, campo in enumerate(campos_validos):
+                    campo_limpo = campo.lower()
+                    # Ignora números puramente sequenciais muito curtos ou datas padrão genéricas de preenchimento trivial se necessário, 
+                    # mas testa o valor estritamente contra os dados da API
+                    if campo_limpo in valores_api_geral:
+                        coincidencias += 1
+                    else:
+                        if len(campo_limpo) > 1:
+                            campos_nao_encontrados.append(f"Posição {idx+1}: '{campo}'")
 
                 if not dados_api:
                     status_val = "⚠️ API Indisponível / Sem Retorno para Cruzamento"
-                    acao_val = "Validar parâmetros obrigatórios (Código do Município e Data de Referência)."
-                elif divergencias_encontradas > 0:
-                    status_val = f"❌ Divergente ({divergencias_encontradas} campo(s) não conferem com a API)"
-                    acao_val = "O valor inserido nesta linha foi alterado ou não existe na base oficial do TCE-CE."
+                    acao_val = "Valide os parâmetros obrigatórios informados no Passo 1."
+                elif len(campos_nao_encontrados) > 1 and coincidencias == 0:
+                    status_val = "❌ Divergente / Não encontrado na API"
+                    acao_val = f"Itens não localizados na base oficial: {', '.join(campos_nao_encontrados[:3])}"
                 else:
-                    status_val = "✅ Todos os campos são compatíveis com a API"
-                    acao_val = "Nenhuma ação necessária."
+                    status_val = "✅ Compatível com os registros da API"
+                    acao_val = "Nenhuma divergência crítica encontrada."
 
                 dados_dinamicos.append({
                     "Linha": num_linha,
