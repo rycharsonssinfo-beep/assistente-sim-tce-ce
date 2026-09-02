@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS para padronizar a fonte corporativa e manter o Light Mode SaaS
+# Injeção CSS para padronizar a fonte corporativa e ocultar textos residuais de ícones
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -38,6 +38,11 @@ st.markdown("""
         background-color: var(--bg-app) !important;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         color: var(--text-main) !important;
+    }
+
+    /* Oculta textos residuais de ícones do Material Design que falharam ao carregar */
+    button[kind="header"] span, [data-testid="collapsedControl"] span {
+        font-size: 0px !important;
     }
 
     .block-container {
@@ -474,7 +479,6 @@ elif pagina_selecionada == "Historico":
         st.info("Nenhum caso catalogado ainda.")
     else:
         for item in historico:
-            # Substituído st.expander por containers com borda para evitar qualquer conflito de ícones
             with st.container(border=True):
                 st.markdown(f"**Caso ID {item['id']} | Módulo: {item.get('modulo', 'Geral')}**")
                 st.code(item['erro'], language="text")
