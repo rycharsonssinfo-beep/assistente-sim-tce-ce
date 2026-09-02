@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS para padronizar a fonte corporativa e ocultar o ícone corrompido do header
+# Injeção CSS completa para padronizar a fonte e ocultar textos residuais de ícones do header
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -40,9 +40,16 @@ st.markdown("""
         color: var(--text-main) !important;
     }
 
-    /* Oculta completamente o texto residual de ícone corrompido do botão de colapso */
-    [data-testid="collapsedControl"] {
+    /* Oculta de vez qualquer texto de ícone corrompido no cabeçalho ou barra lateral */
+    [data-testid="collapsedControl"] span, [data-testid="stHeader"] span {
         display: none !important;
+    }
+    
+    [data-testid="collapsedControl"] {
+        opacity: 0.7;
+    }
+    [data-testid="collapsedControl"]:hover {
+        opacity: 1;
     }
 
     .block-container {
@@ -434,7 +441,7 @@ elif pagina_selecionada == "Divergências":
                 linhas_alvo.append(int(parte))
 
         if not linhas_alvo:
-            linhas_alvo = [5]
+azinhas_alvo = [5]
 
         for linha_num in linhas_alvo:
             if 0 < linha_num <= len(linhas_locais):
