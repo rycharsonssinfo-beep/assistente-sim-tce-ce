@@ -146,7 +146,7 @@ class AuditoriaTCEAPI:
             for params in variacoes_params:
                 try:
                     clean_params = {k: v for k, v in params.items() if v is not None}
-                    response = self.session.get(url_endpoint, params=clean_params, timeout=15)
+                    response = self.session.get(url_endpoint, params=clean_params, timeout=10)
                     if response.status_code == 200:
                         dados = response.json()
                         if isinstance(dados, dict):
@@ -266,16 +266,18 @@ with aba2:
         with col_p2:
             linhas_locais_input = st.text_input("Linhas com erro (opcional, ex: 5, 9)", placeholder="Ex: 5, 9, 33...")
 
-        col_up1, col_up2 = st.columns(2)
+        col_up1, col_up2, col_up3 = st.columns(3)
         with col_up1:
-            arquivo_auditoria = st.file_uploader("Arquivo Principal (.NE, .DCD, .VCL, .LCO, etc.)", type=["lco", "bas", "vcl", "pat", "ne", "dcd", "txt", "csv"])
+            arquivo_auditoria = st.file_uploader("Arquivo Principal da Prefeitura (.DCD, .NE, etc.)", type=["lco", "bas", "vcl", "pat", "ne", "dcd", "txt", "csv"])
         with col_up2:
-            arquivo_secundario = st.file_uploader("Arquivo Complementar opcional", type=["dcd", "ne", "lco", "bas", "vcl", "pat", "txt", "csv"])
+            arquivo_historico_local = st.file_uploader("Base de Histórico / Referência (Opcional)", type=["csv", "txt"], help="Envie um arquivo CSV/TXT com os dados oficiais corretos para comparar caso a API esteja vazia.")
+        with col_up3:
+            arquivo_secundario = st.file_uploader("Arquivo Complementar", type=["dcd", "ne", "lco", "bas", "vcl", "pat", "txt", "csv"])
 
-        if st.button("Executar Auditoria Cruzada com API 🚀", type="primary", use_container_width=True):
+        if st.button("Executar Auditoria Cruzada 🚀", type="primary", use_container_width=True):
             arquivo_escolhido = arquivo_auditoria if arquivo_auditoria else arquivo_secundario
             if not arquivo_escolhido:
-                st.error("Envie ao menos um arquivo local.")
+                st.error("Envie ao menos o arquivo principal da prefeitura.")
             else:
                 nome_arq = arquivo_escolhido.name
                 st.session_state["arquivo_auditoria_obj"] = arquivo_escolhido
@@ -292,16 +294,31 @@ with aba2:
                 match_ref = re.search(r'(20\d{4})', nome_arq)
                 data_ref = match_ref.group(1) if match_ref else f"{exercicio}01"
 
-                with st.spinner(f"Consultando API do TCE-CE para o arquivo '{nome_arq}'..."):
-                    params = {
-                        "exercicio": exercicio,
-                        "codigo_municipio": codigo_municipio_input.strip(),
-                        "data_referencia_doc": data_ref
-                    }
-                    df_api = cliente_api.consultar_com_fallback(endpoints_possiveis, params)
-                    
-                    # Sem mock cego: se a API estiver vazia, o histórico reflete que não há registros correspondentes na base externa
-                    st.session_state["dados_api_retorno"] = df_api.to_dict(orient="records") if not df_api.empty else []
+                df_api = pd.DataFrame()
+                
+                # Se o usuário enviou uma base de histórico local, usa ela prioritariamente para simular/validar o cruzamento perfeitamente
+                if arquivo_historico_local:
+                    try:
+                        df_api = pd.read_csv(arquivo_historico_local, header=None)
+                        # Converte em dicionário de registros simulando a API
+                        mock_regs = []
+                        for _, row in df_api.iterrows():
+                            mock_regs.append({f"campo_{i}": str(val) for i, val in enumerate(row.values)})
+                        df_api = pd.DataFrame(mock_regs)
+                    except Exception:
+                        pass
+
+                # Se não enviou base local, tenta a API oficial do TCE
+                if df_api.empty:
+                    with st.spinner(f"Consultando API do TCE-CE para o arquivo '{nome_arq}'..."):
+                        params = {
+                            "exercicio": exercicio,
+                            "codigo_municipio": codigo_municipio_input.strip(),
+                            "data_referencia_doc": data_ref
+                        }
+                        df_api = cliente_api.consultar_com_fallback(endpoints_possiveis, params)
+
+                st.session_state["dados_api_retorno"] = df_api.to_dict(orient="records") if not df_api.empty else []
 
                 st.session_state["etapa_auditoria"] = 3
                 st.rerun()
@@ -330,7 +347,6 @@ with aba2:
             else:
                 continue
 
-            # Busca correspondência real baseada no primeiro campo (ex: número do documento/empenho)
             reg_historico = {}
             val_arquivo_chave = campos_linha[0] if campos_linha else ""
             
@@ -340,7 +356,6 @@ with aba2:
                     reg_historico = reg
                     break
             
-            # Se não achar por chave exata mas houver dados, pega pelo índice correspondente se houver
             if not reg_historico and dados_api:
                 idx_reg = (linha_num - 1) % len(dados_api)
                 reg_historico = dados_api[idx_reg]
@@ -352,7 +367,7 @@ with aba2:
             
             termo_modulo = layout_atual['nome'].split()[0]
             status_cor = "#EF4444" if is_erro else "#059669"
-            status_texto = f"{termo_modulo} não encontrado na API" if is_erro else f"{termo_modulo} localizado"
+            status_texto = f"{termo_modulo} não encontrado" if is_erro else f"{termo_modulo} localizado"
             
             with st.container():
                 st.markdown("---")
@@ -367,9 +382,9 @@ with aba2:
                 for idx, col_ui in enumerate(cols_ui):
                     nome_coluna_atual = nomes_colunas[idx] if idx < len(nomes_colunas) else f"Campo {idx+1}"
                     val_arquivo = campos_linha[idx] if idx < len(campos_linha) else "-"
-                    val_historico = str(valores_hist_lista[idx]) if idx < len(valores_hist_lista) else "Não disponível na API"
+                    val_historico = str(valores_hist_lista[idx]) if idx < len(valores_hist_lista) else "Não disponível"
                     
-                    divergente = (val_historico != "Não disponível na API" and val_arquivo != val_historico)
+                    divergente = (val_historico != "Não disponível" and val_arquivo != val_historico)
                     
                     with col_ui:
                         st.markdown(f"""
