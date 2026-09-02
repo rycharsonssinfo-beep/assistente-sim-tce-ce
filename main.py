@@ -9,16 +9,16 @@ import google.generativeai as genai
 # 1. CONFIGURAÇÃO DA PÁGINA (LIGHT MODE CORPORATIVO)
 # ==========================================
 st.set_page_config(
-    page_title="Consulta TCE — Análise de Divergências",
+    page_title="Análise TCE — Análise de Divergências",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS para o Light Mode Premium mantendo a mesma estrutura SaaS moderna
+# Injeção CSS para padronizar a fonte corporativa e manter o Light Mode SaaS
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
     :root {
         --bg-app: #F8FAFC;
@@ -34,10 +34,10 @@ st.markdown("""
         --accent-hover: #1D4ED8;
     }
 
-    .stApp {
-        background-color: var(--bg-app);
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        color: var(--text-main);
+    .stApp, html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        background-color: var(--bg-app) !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        color: var(--text-main) !important;
     }
 
     /* Otimização da largura e espaçamento do workspace principal */
@@ -50,9 +50,12 @@ st.markdown("""
     }
 
     /* Tipografia de alta precisão corporativa */
+    h1, h2, h3, h4, h5, h6, p, span, label, div {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    }
+
     h1, h2, h3, h4 {
         color: var(--text-main) !important;
-        font-family: 'Plus Jakarta Sans', sans-serif !important;
         letter-spacing: -0.025em;
     }
 
@@ -231,7 +234,7 @@ with st.sidebar:
     st.markdown("""
         <div style='padding-bottom: 0.5rem;'>
             <div style='font-size: 0.95rem; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px;'>
-                <span>🛡️</span> Consulta TCE
+                <span>🛡️</span> Análise TCE
             </div>
             <div style='font-size: 0.78rem; color: #475569; margin-top: 2px;'>Plataforma de Auditoria Municipal</div>
         </div>
@@ -291,7 +294,7 @@ with st.sidebar:
 st.markdown("""
     <div style='margin-bottom: 2rem;'>
         <div style='font-size: 0.75rem; font-weight: 600; color: #2563EB; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;'>Auditoria Municipal SIM</div>
-        <h1 style='font-size: 1.75rem; font-weight: 700; margin-bottom: 0.2rem;'>Consulta TCE — Análise de Divergências</h1>
+        <h1 style='font-size: 1.75rem; font-weight: 700; margin-bottom: 0.2rem;'>Análise TCE — Análise de Divergências</h1>
         <p style='color: #475569; font-size: 0.92rem; margin: 0;'>Ambiente corporativo para diagnóstico e rastreabilidade de inconsistências em arquivos de remessa.</p>
     </div>
 """, unsafe_allow_html=True)
@@ -367,7 +370,14 @@ elif pagina_selecionada == "Divergências":
 
     if passo == 1:
         st.subheader("Definição de Linhas Inconsistentes")
-        linhas_locais_input = st.text_area("Linhas com erro (ex: 5, 9 ou 10-15)", value="311, 330", height=80)
+        
+        # Correção solicitada: Campo limpo sem valores pré-preenchidos incorretos
+        linhas_locais_input = st.text_area(
+            "Linhas com erro (ex: 5, 9 ou 10-15)", 
+            value="", 
+            placeholder="Digite os números ou intervalos das linhas problemáticas...",
+            height=80
+        )
         
         if st.button("Avançar para upload", type="primary"):
             st.session_state["linhas_locais_input"] = linhas_locais_input
