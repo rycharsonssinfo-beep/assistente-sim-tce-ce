@@ -6,7 +6,7 @@ import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM
+# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM AVANÇADO
 # ==========================================
 st.set_page_config(
     page_title="Consulta TCE - Análise de Divergências",
@@ -16,6 +16,8 @@ st.set_page_config(
 
 st.markdown("""
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
     :root {
         --bg-main: #F8FAFC;
         --surface: #FFFFFF;
@@ -25,18 +27,111 @@ st.markdown("""
         --text-muted: #64748B;
         --primary: #059669;
         --primary-hover: #047857;
+        --primary-light: #ECFDF5;
+        --danger-bg: #FEF2F2;
+        --danger-border: #FCA5A5;
+        --danger-text: #DC2626;
     }
-    .main { background-color: var(--bg-main); font-family: 'Inter', sans-serif; }
-    .block-container { padding-top: 1.5rem; padding-bottom: 3rem; max-width: 1240px; }
-    h1, h2, h3, h4 { color: var(--text-main); font-weight: 700; letter-spacing: -0.03em; }
-    .stTabs [data-baseweb="tab-list"] { gap: 6px; background-color: #F1F5F9; padding: 6px; border-radius: 10px; border: 1px solid var(--border-color); }
-    .stTabs [data-baseweb="tab"] { height: 40px; background-color: transparent; border-radius: 6px; color: var(--text-muted); font-weight: 600; font-size: 13px; border: none; padding: 0 14px; }
-    .stTabs [aria-selected="true"] { background-color: var(--surface) !important; color: var(--primary) !important; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .stButton button { border-radius: 8px; font-weight: 600; font-size: 14px; border: 1px solid var(--border-strong); background-color: var(--surface); color: var(--text-main); transition: all 0.2s ease; }
-    .stButton button:hover { border-color: var(--primary); color: var(--primary); background-color: #F0FDF4; }
-    .stButton button[kind="primary"] { background-color: var(--primary); color: white; border: none; }
-    .stButton button[kind="primary"]:hover { background-color: var(--primary-hover); color: white; box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.3); }
-    section[data-testid="stSidebar"] { background-color: #F1F5F9; border-right: 1px solid var(--border-color); }
+
+    .main, html, body, [class*="st-"] {
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        background-color: var(--bg-main);
+        color: var(--text-main);
+    }
+
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 4rem;
+        max-width: 1300px;
+    }
+
+    /* Títulos e Cabeçalhos modernos */
+    h1, h2, h3, h4 {
+        color: var(--text-main);
+        font-weight: 700;
+        letter-spacing: -0.03em;
+    }
+
+    /* Abas Modernas Estilizadas */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #F1F5F9;
+        padding: 6px;
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 42px;
+        background-color: transparent;
+        border-radius: 8px;
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 13px;
+        border: none;
+        padding: 0 16px;
+        transition: all 0.2s ease;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: var(--surface) !important;
+        color: var(--primary) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    }
+
+    /* Botões Refinados */
+    .stButton button {
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 14px;
+        border: 1px solid var(--border-strong);
+        background-color: var(--surface);
+        color: var(--text-main);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        padding: 0.5rem 1rem;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+    .stButton button:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+        background-color: var(--primary-light);
+    }
+    .stButton button[kind="primary"] {
+        background-color: var(--primary);
+        color: white;
+        border: none;
+        box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.2);
+    }
+    .stButton button[kind="primary"]:hover {
+        background-color: var(--primary-hover);
+        color: white;
+        box-shadow: 0 6px 8px -1px rgba(5, 150, 105, 0.3);
+    }
+
+    /* Sidebar Imersiva */
+    section[data-testid="stSidebar"] {
+        background-color: #F8FAFC;
+        border-right: 1px solid var(--border-color);
+        padding-top: 1rem;
+    }
+
+    /* Cards e Containers personalizados */
+    .audit-card {
+        border: 1px solid var(--danger-border);
+        padding: 16px;
+        border-radius: 12px;
+        background: var(--surface);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        transition: transform 0.2s ease;
+        min-height: 105px;
+    }
+    .audit-card:hover {
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.08);
+    }
+
+    /* Estilização de caixas de texto e uploaders */
+    .stTextArea textarea, .stFileUploader {
+        border-radius: 10px !important;
+        border-color: var(--border-strong) !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -170,18 +265,25 @@ Ocorreu um limite temporário de requisições na API do Gemini (`429 Quota Exce
 # 5. SIDEBAR
 # ==========================================
 with st.sidebar:
-    st.markdown("## 🛡️ Consulta TCE")
-    st.caption("Painel de Análise de Divergências")
+    st.markdown("### 🛡️ Consulta TCE")
+    st.caption("Painel Corporativo de Auditoria")
     st.markdown("---")
+    
+    # Métrica estilizada
     st.metric(label="Casos Catalogados", value=len(st.session_state['historico_casos']))
+    
     st.markdown("---")
-    st.download_button("Exportar Backup (.JSON)", data=exportar_base_json(), file_name="backup_sim.json", mime="application/json", use_container_width=True)
+    st.markdown("#### ⚙️ Ações Rápidas")
+    st.download_button("📥 Exportar Backup (.JSON)", data=exportar_base_json(), file_name="backup_sim.json", mime="application/json", use_container_width=True)
+    
+    st.markdown("---")
+    st.markdown("<div style='font-size: 12px; color: #64748B; text-align: center;'>Sistema Integrado Municipal<br>© 2026 TCE-CE</div>", unsafe_allow_html=True)
 
 # ==========================================
 # 6. TELA PRINCIPAL E ABAS
 # ==========================================
 st.title("Consulta TCE - Análise de Divergências")
-st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada de auditoria de arquivos de remessa municipal.</span>", unsafe_allow_html=True)
+st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -8px; margin-bottom: 24px;'>Plataforma unificada de auditoria inteligente de arquivos de remessa municipal.</span>", unsafe_allow_html=True)
 
 aba1, aba2, aba3, aba4 = st.tabs([
     "🔍 Diagnóstico de Ocorrências", 
@@ -192,10 +294,15 @@ aba1, aba2, aba3, aba4 = st.tabs([
 
 with aba1:
     st.markdown("##### 🔍 Diagnóstico Inteligente com Mapeamento Oficial")
-    user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: LCO2026.TXT...")
-    if st.button("Analisar com Layout Oficial", type="primary", use_container_width=True):
+    user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: LCO2026.TXT - Erro na linha...")
+    
+    col_btn1, col_space = st.columns([2, 5])
+    with col_btn1:
+        analisar_btn = st.button("Analisar com Layout Oficial", type="primary", use_container_width=True)
+
+    if analisar_btn:
         if user_input.strip():
-            with st.spinner("Analisando consistência..."):
+            with st.spinner("Processando auditoria inteligente..."):
                 sigla_arq, modulo_identificado = classificar_erro(user_input)
                 resposta_ia, conf = chamar_gemini_seguro(user_input)
                 st.markdown("---")
@@ -209,34 +316,37 @@ with aba2:
 
     passo = st.session_state["etapa_auditoria"]
     
+    # Header de etapas refinado visualmente
     st.markdown(f"""
-        <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>1. Linhas</div>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==2 else "#F1F5F9"}; color: {"white" if passo==2 else "#64748B"}; font-weight: 600; font-size: 13px;'>2. Arquivo</div>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px;'>3. Resultado</div>
+        <div style='display: flex; gap: 12px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 14px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);'>
+            <div style='flex: 1; text-align: center; padding: 10px; border-radius: 8px; background: {"#059669" if passo==1 else "#F8FAFC"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px; border: 1px solid {"#059669" if passo==1 else "#E2E8F0"};'>1. Seleção de Linhas</div>
+            <div style='flex: 1; text-align: center; padding: 10px; border-radius: 8px; background: {"#059669" if passo==2 else "#F8FAFC"}; color: {"white" if passo==2 else "#64748B"}; font-weight: 600; font-size: 13px; border: 1px solid {"#059669" if passo==2 else "#E2E8F0"};'>2. Upload do Arquivo</div>
+            <div style='flex: 1; text-align: center; padding: 10px; border-radius: 8px; background: {"#059669" if passo==3 else "#F8FAFC"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px; border: 1px solid {"#059669" if passo==3 else "#E2E8F0"};'>3. Relatório de Divergências</div>
         </div>
     """, unsafe_allow_html=True)
 
     if passo == 1:
         st.markdown("##### Defina as linhas com erro para iniciar")
-        linhas_locais_input = st.text_area("Linhas com erro (ex: 5, 9 ou 10-15)", value="311, 330", height=100, placeholder="Ex.: 5, 9")
+        linhas_locais_input = st.text_area("Linhas com erro (ex: 5, 9 ou 10-15)", value="311, 330", height=100, placeholder="Ex.: 311, 330")
         
-        if st.button("Avançar para upload", type="primary"):
-            st.session_state["linhas_locais_input"] = linhas_locais_input
-            st.session_state["etapa_auditoria"] = 2
-            st.rerun()
+        col_avancar, _ = st.columns([2, 5])
+        with col_avancar:
+            if st.button("Avançar para upload", type="primary", use_container_width=True):
+                st.session_state["linhas_locais_input"] = linhas_locais_input
+                st.session_state["etapa_auditoria"] = 2
+                st.rerun()
 
     elif passo == 2:
         st.markdown("##### Envie o arquivo de remessa da prefeitura")
-        arquivo_enviado = st.file_uploader("Selecione o arquivo (.txt, .dcd, .lco, .ne, .csv)", type=["txt", "dcd", "lco", "ne", "csv"])
+        arquivo_enviado = st.file_uploader("Selecione o arquivo de remessa (.txt, .dcd, .lco, .ne, .csv)", type=["txt", "dcd", "lco", "ne", "csv"])
         
-        col_b1, col_b2 = st.columns(2)
+        col_b1, col_b2, _ = st.columns([1, 1, 3])
         with col_b1:
-            if st.button("Voltar"):
+            if st.button("← Voltar", use_container_width=True):
                 st.session_state["etapa_auditoria"] = 1
                 st.rerun()
         with col_b2:
-            if st.button("Processar Análise", type="primary"):
+            if st.button("Processar Análise", type="primary", use_container_width=True):
                 if not arquivo_enviado:
                     st.error("Envie um arquivo para continuar.")
                 else:
@@ -254,10 +364,10 @@ with aba2:
     elif passo == 3:
         col_res1, col_res2 = st.columns([5, 1])
         with col_res1:
-            st.markdown("##### Resultado da análise")
-            st.caption("Mostrando apenas divergências com base no arquivo real enviado.")
+            st.markdown("##### Resultado da Análise de Divergências")
+            st.caption("Comparativo estruturado entre os registros do arquivo enviado e a base histórica.")
         with col_res2:
-            st.button("Exportar CSV", use_container_width=True)
+            st.button("📥 Exportar CSV", use_container_width=True)
 
         nome_arq = st.session_state.get("nome_arquivo_ativo", "contrato.lco")
         layout_atual = obter_layout_arquivo(nome_arq)
@@ -300,7 +410,7 @@ with aba2:
                 with col_head1:
                     st.markdown(f"#### Linha {linha_num}")
                 with col_head2:
-                    st.markdown("<div style='background: #FEE2E2; color: #DC2626; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; text-align: center;'>Contrato não encontrado</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='background: #FEE2E2; color: #DC2626; padding: 5px 10px; border-radius: 8px; font-weight: 700; font-size: 11px; text-align: center; border: 1px solid #FCA5A5;'>Registro Inexistente</div>", unsafe_allow_html=True)
                 
                 nomes_colunas = layout_atual["campos"]
                 cols_ui = st.columns(len(nomes_colunas))
@@ -315,17 +425,25 @@ with aba2:
                     
                     with col_ui:
                         st.markdown(f"""
-                            <div style='border: 1px solid #FCA5A5; padding: 12px; border-radius: 8px; background: #FFF; min-height: 95px;'>
-                                <small style='color: #64748B; font-weight: bold;'>{nome_col_atual.upper()}</small><br>
-                                <div style='margin-top: 4px; color: #64748B;'><small>Arquivo</small><br><span style='color: #DC2626; font-weight: 600;'>{v_arq}</span></div>
-                                <div style='margin-top: 2px; color: #64748B;'><small>Histórico</small><br><span style='color: #0F172A; font-weight: 600;'>{v_hist}</span></div>
+                            <div class='audit-card'>
+                                <div style='color: #475569; font-weight: 700; font-size: 11px; letter-spacing: 0.05em; margin-bottom: 8px;'>{nome_col_atual.upper()}</div>
+                                <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;'>
+                                    <span style='color: #64748B;'>Arquivo:</span>
+                                    <span style='color: #DC2626; font-weight: 600;'>{v_arq}</span>
+                                </div>
+                                <div style='display: flex; justify-content: space-between; font-size: 13px;'>
+                                    <span style='color: #64748B;'>Histórico:</span>
+                                    <span style='color: #0F172A; font-weight: 600;'>{v_hist}</span>
+                                </div>
                             </div>
                         """, unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Nova Análise"):
-            st.session_state["etapa_auditoria"] = 1
-            st.rerun()
+        col_nova_analise, _ = st.columns([2, 5])
+        with col_nova_analise:
+            if st.button("🔄 Realizar Nova Análise", type="primary", use_container_width=True):
+                st.session_state["etapa_auditoria"] = 1
+                st.rerun()
 
 with aba3:
     st.markdown("##### 📚 Histórico Registrado de Casos")
