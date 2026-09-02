@@ -6,7 +6,7 @@ import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM (DARK MODE PREMIUM)
+# 1. CONFIGURAÇÃO DA PÁGINA (DESIGN SYSTEM CORPORATIVO)
 # ==========================================
 st.set_page_config(
     page_title="Consulta TCE - Análise de Divergências",
@@ -14,149 +14,84 @@ st.set_page_config(
     layout="wide"
 )
 
+# Injeção mínima e ultra-limpa focada exclusivamente em superfícies e tipografia global
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
-    /* Variáveis Globais - Dark Mode Sofisticado (SaaS / Enterprise UI) */
     :root {
-        --bg-app: #0B0F19;
-        --surface-sidebar: #0F172A;
-        --surface-card: #111827;
-        --surface-card-hover: #1F2937;
-        --border-subtle: rgba(255, 255, 255, 0.08);
-        --border-strong: rgba(255, 255, 255, 0.15);
-        
-        --text-main: #F8FAFC;
+        --bg-app: #090D16;
+        --surface-sidebar: #0E1320;
+        --surface-card: #131B2E;
+        --border-subtle: rgba(255, 255, 255, 0.06);
+        --border-strong: rgba(255, 255, 255, 0.12);
+        --text-main: #F1F5F9;
         --text-muted: #94A3B8;
         --text-dim: #64748B;
-        
-        --accent: #3B82F6;          /* Azul corporativo moderno / Elétrico */
-        --accent-hover: #2563EB;
-        --accent-subtle: rgba(59, 130, 246, 0.12);
-        
-        --danger-bg: rgba(239, 68, 68, 0.1);
-        --danger-border: rgba(239, 68, 68, 0.3);
-        --danger-text: #F87171;
+        --accent: #2563EB;
+        --accent-hover: #1D4ED8;
     }
 
-    /* Reset global de tipografia e fundo nativo */
     .stApp {
         background-color: var(--bg-app);
         font-family: 'Plus Jakarta Sans', sans-serif;
         color: var(--text-main);
     }
 
+    /* Ajuste estrutural do container principal para evitar desperdício excessivo de margens */
     .block-container {
-        padding-top: 2rem;
+        padding-top: 2.5rem;
         padding-bottom: 4rem;
-        max-width: 1280px;
+        max-width: 1400px;
     }
 
-    /* Tipografia de Cabeçalhos */
+    /* Tipografia refinada */
     h1, h2, h3, h4 {
         color: var(--text-main) !important;
         font-family: 'Plus Jakarta Sans', sans-serif !important;
-        font-weight: 700;
-        letter-spacing: -0.025em;
+        letter-spacing: -0.02em;
     }
 
-    /* Sidebar Estilizada com Profundidade */
+    /* Sidebar corporativa limpa */
     section[data-testid="stSidebar"] {
         background-color: var(--surface-sidebar) !important;
         border-right: 1px solid var(--border-subtle);
     }
+    
     section[data-testid="stSidebar"] .block-container {
-        padding-top: 1.5rem;
+        padding-top: 2rem;
+        padding-left: 1.2rem;
+        padding-right: 1.2rem;
     }
 
-    /* Abas Nativas Estilizadas de Forma Limpa */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 6px;
+    /* Caixas de métricas discretas e elegantes na sidebar */
+    [data-testid="stMetric"] {
         background-color: var(--surface-card);
-        padding: 6px;
-        border-radius: 10px;
         border: 1px solid var(--border-subtle);
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 38px;
-        background-color: transparent;
-        border-radius: 6px;
-        color: var(--text-muted);
-        font-weight: 600;
-        font-size: 13px;
-        border: none;
-        padding: 0 16px;
-        transition: all 0.2s ease;
-    }
-    .stTabs [data-baseweb="tab"]:hover {
-        color: var(--text-main);
-        background-color: rgba(255, 255, 255, 0.03);
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: var(--accent-subtle) !important;
-        color: var(--accent) !important;
-        border: 1px solid rgba(59, 130, 246, 0.2);
-    }
-
-    /* Botões Modernos Nativos */
-    .stButton button {
+        padding: 12px 16px;
         border-radius: 8px;
-        font-weight: 600;
-        font-size: 13px;
-        border: 1px solid var(--border-strong);
-        background-color: var(--surface-card);
-        color: var(--text-main);
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        min-height: 38px;
     }
-    .stButton button:hover {
-        border-color: var(--accent);
-        color: var(--accent);
-        background-color: rgba(59, 130, 246, 0.05);
-    }
-    .stButton button[kind="primary"] {
-        background-color: var(--accent);
-        color: #FFFFFF;
-        border: none;
-    }
-    .stButton button[kind="primary"]:hover {
-        background-color: var(--accent-hover);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-    }
-
-    /* Entradas de Texto e Uploaders refinados */
-    .stTextArea textarea, .stFileUploader {
-        background-color: var(--surface-card) !important;
-        border: 1px solid var(--border-strong) !important;
-        border-radius: 8px !important;
-        color: var(--text-main) !important;
-    }
-    .stTextArea textarea:focus {
-        border-color: var(--accent) !important;
-        box-shadow: 0 0 0 1px var(--accent) !important;
-    }
-
-    /* Cards de Auditoria Personalizados (Linhas / Divergências) */
-    .audit-card {
-        border: 1px solid var(--danger-border);
-        padding: 16px;
-        border-radius: 10px;
-        background: var(--surface-card);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        transition: transform 0.2s ease, border-color 0.2s ease;
-    }
-    .audit-card:hover {
-        border-color: #F87171;
-    }
-
-    /* Métricas e caixas de status na Sidebar */
     [data-testid="stMetricValue"] {
         color: var(--text-main) !important;
+        font-size: 1.5rem !important;
         font-weight: 700;
     }
     [data-testid="stMetricLabel"] {
         color: var(--text-muted) !important;
+        font-size: 0.8rem !important;
+    }
+
+    /* Ajuste visual para textareas e uploader nativos */
+    .stTextArea textarea {
+        background-color: var(--surface-card) !important;
+        border: 1px solid var(--border-strong) !important;
+        color: var(--text-main) !important;
+        border-radius: 8px !important;
+        font-size: 0.95rem !important;
+    }
+    .stTextArea textarea:focus {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 1px var(--accent) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -244,7 +179,7 @@ def obter_layout_arquivo(nome_arquivo):
     return LAYOUTS_SIM.get(ext, LAYOUTS_SIM["LCO"])
 
 # ==========================================
-# 4. INTELIGÊNCIA ARTIFICIAL (GEMINI COM FALLBACK)
+# 4. INTELIGÊNCIA ARTIFICIAL (GEMINI)
 # ==========================================
 def classificar_erro(texto):
     if not texto:
@@ -263,7 +198,7 @@ if api_key:
 
 def chamar_gemini_seguro(prompt_usuario):
     if not api_key:
-        return """### ⚠️ Erro de Configuração\nA chave da API Gemini não foi configurada.""", "Baixa"
+        return """### ⚠️ Erro de Configuração\nA chave da API Gemini não foi configurada nos segredos do Streamlit.""", "Baixa"
     
     prompt_sistema = "Você é um Auditor Especialista Sênior no sistema SIM do TCE-CE. Analise o erro e estruture em Causa Raiz, Como Corrigir e Validação Técnica."
     
@@ -274,42 +209,60 @@ def chamar_gemini_seguro(prompt_usuario):
             return response.text, "Alta"
     except Exception as e:
         diagnostico_offline = f"""### ⚠️ Diagnóstico por Regra Interna (Limite da IA Atingido)
-Ocorreu um limite temporário de requisições na API do Gemini (`429 Quota Exceeded`). Abaixo segue a diretriz padrão do TCE-CE para esta inconsistência:
+Ocorreu um limite temporário de requisições na API do Gemini (`429 Quota Exceeded`). Diretriz padrão do TCE-CE:
 
-* **Causa Raiz Identificada:** O arquivo enviado possui chaves estrangeiras ou campos obrigatórios que não encontram correspondência na base oficial consolidada do módulo anterior.
-* **Como Corrigir:** 
-  1. Verifique se o arquivo base anterior foi enviado na ordem correta para o sistema do TCE.
-  2. Confirme se os códigos de município e as chaves de relacionamento estão padronizados sem caracteres especiais.
-* **Validação Técnica:** Reenvie o lote de remessa correspondente após a consolidação correta da base de dependência.
+* **Causa Raiz Identificada:** O arquivo enviado possui chaves estrangeiras ou campos obrigatórios sem correspondência na base oficial consolidada.
+* **Como Corrigir:** Verifique se o arquivo base anterior foi enviado na ordem correta e se os códigos de município estão padronizados.
+* **Validação Técnica:** Reenvie o lote de remessa correspondente.
 
-*(Detalhe técnico do erro: `{e}`)*"""
+*(Detalhe técnico: `{e}`)*"""
         return diagnostico_offline, "Média"
         
     return "Não foi possível gerar resposta.", "Média"
 
 # ==========================================
-# 5. SIDEBAR
+# 5. SIDEBAR SAAS MODERNA
 # ==========================================
 with st.sidebar:
     st.markdown("### 🛡️ Consulta TCE")
-    st.caption("Painel Corporativo de Auditoria")
-    st.markdown("---")
+    st.caption("Plataforma de Auditoria Municipal")
     
+    st.markdown("---")
     st.metric(label="Casos Catalogados", value=len(st.session_state['historico_casos']))
     
     st.markdown("---")
-    st.markdown("#### Ações do Sistema")
-    st.download_button("Exportar Backup (.JSON)", data=exportar_base_json(), file_name="backup_sim.json", mime="application/json", use_container_width=True)
+    st.markdown("##### Gerenciamento")
+    st.download_button(
+        "📥 Exportar Backup (.JSON)", 
+        data=exportar_base_json(), 
+        file_name="backup_sim.json", 
+        mime="application/json", 
+        use_container_width=True
+    )
     
     st.markdown("---")
-    st.markdown("<div style='font-size: 11px; color: #64748B; text-align: center;'>Sistema Integrado Municipal<br>© 2026 TCE-CE</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='font-size: 0.75rem; color: #64748B; line-height: 1.4;'>"
+        "<strong>Sistema Integrado Municipal</strong><br>"
+        "Tribunal de Contas do Estado do Ceará<br>"
+        "© 2026 TCE-CE"
+        "</div>", 
+        unsafe_allow_html=True
+    )
 
 # ==========================================
-# 6. TELA PRINCIPAL E ABAS
+# 6. HEADER PRINCIPAL
 # ==========================================
-st.title("Consulta TCE - Análise de Divergências")
-st.markdown("<span style='color: #94A3B8; font-size: 14px; display: block; margin-top: -6px; margin-bottom: 24px;'>Plataforma corporativa de auditoria inteligente de arquivos de remessa municipal.</span>", unsafe_allow_html=True)
+st.markdown("""
+    <div style='margin-bottom: 2rem;'>
+        <h1 style='font-size: 1.85rem; font-weight: 700; margin-bottom: 0.2rem;'>Consulta TCE — Análise de Divergências</h1>
+        <p style='color: #94A3B8; font-size: 0.95rem; margin: 0;'>Plataforma corporativa de auditoria inteligente de arquivos de remessa municipal.</p>
+    </div>
+""", unsafe_allow_html=True)
 
+# ==========================================
+# 7. NAVEGAÇÃO ENTRE AS SEÇÕES (ABAS NATIVAS REFINADAS)
+# ==========================================
 aba1, aba2, aba3, aba4 = st.tabs([
     "🔍 Diagnóstico de Ocorrências", 
     "📊 Análise de Divergências", 
@@ -318,8 +271,15 @@ aba1, aba2, aba3, aba4 = st.tabs([
 ])
 
 with aba1:
-    st.markdown("##### 🔍 Diagnóstico Inteligente com Mapeamento Oficial")
-    user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: LCO2026.TXT - Erro na linha...")
+    st.markdown("### Diagnóstico Inteligente com Mapeamento Oficial")
+    st.markdown("<p style='color: #94A3B8; font-size: 0.9rem; margin-top: -10px;'>Cole o relatório de erro ou inconsistência do SIM para análise imediata da causa raiz.</p>", unsafe_allow_html=True)
+    
+    user_input = st.text_area(
+        "Relatório de ocorrência", 
+        height=140, 
+        placeholder="Cole aqui o relatório de erro do sistema SIM (Ex: LCO2026.TXT - Erro na linha 311)...",
+        label_visibility="collapsed"
+    )
     
     col_btn1, _ = st.columns([2, 5])
     with col_btn1:
@@ -341,18 +301,20 @@ with aba2:
 
     passo = st.session_state["etapa_auditoria"]
     
-    # Navegação de etapas em Dark Mode corporativo
-    st.markdown(f"""
-        <div style='display: flex; gap: 10px; background: #111827; border: 1px solid rgba(255, 255, 255, 0.08); padding: 12px; border-radius: 10px; margin-bottom: 24px;'>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"rgba(59, 130, 246, 0.15)" if passo==1 else "transparent"}; color: {"#3B82F6" if passo==1 else "#94A3B8"}; font-weight: 600; font-size: 13px; border: 1px solid {"rgba(59, 130, 246, 0.3)" if passo==1 else "transparent"};'>1. Seleção de Linhas</div>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"rgba(59, 130, 246, 0.15)" if passo==2 else "transparent"}; color: {"#3B82F6" if passo==2 else "#94A3B8"}; font-weight: 600; font-size: 13px; border: 1px solid {"rgba(59, 130, 246, 0.3)" if passo==2 else "transparent"};'>2. Upload do Arquivo</div>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"rgba(59, 130, 246, 0.15)" if passo==3 else "transparent"}; color: {"#3B82F6" if passo==3 else "#94A3B8"}; font-weight: 600; font-size: 13px; border: 1px solid {"rgba(59, 130, 246, 0.3)" if passo==3 else "transparent"};'>3. Relatório de Divergências</div>
-        </div>
-    """, unsafe_allow_html=True)
+    # Barra de progresso nativa clara e limpa
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f"{'🔵 **1. Seleção de Linhas**' if passo == 1 else '✅ 1. Seleção de Linhas'}")
+    with c2:
+        st.markdown(f"{'🔵 **2. Upload do Arquivo**' if passo == 2 else ('✅ 2. Upload do Arquivo' if passo > 2 else '2. Upload do Arquivo')}")
+    with c3:
+        st.markdown(f"{'🔵 **3. Relatório de Divergências**' if passo == 3 else '3. Relatório de Divergências'}")
+
+    st.markdown("---")
 
     if passo == 1:
-        st.markdown("##### Defina as linhas com erro para iniciar")
-        linhas_locais_input = st.text_area("Linhas com erro (ex: 5, 9 ou 10-15)", value="311, 330", height=100, placeholder="Ex.: 311, 330")
+        st.subheader("Definição de Linhas Inconsistentes")
+        linhas_locais_input = st.text_area("Linhas com erro (ex: 5, 9 ou 10-15)", value="311, 330", height=80)
         
         col_avancar, _ = st.columns([2, 5])
         with col_avancar:
@@ -362,12 +324,12 @@ with aba2:
                 st.rerun()
 
     elif passo == 2:
-        st.markdown("##### Envie o arquivo de remessa da prefeitura")
-        arquivo_enviado = st.file_uploader("Selecione o arquivo de remessa (.txt, .dcd, .lco, .ne, .csv)", type=["txt", "dcd", "lco", "ne", "csv"])
+        st.subheader("Upload do Arquivo de Remessa")
+        arquivo_enviado = st.file_uploader("Selecione o arquivo (.txt, .dcd, .lco, .ne, .csv)", type=["txt", "dcd", "lco", "ne", "csv"])
         
         col_b1, col_b2, _ = st.columns([1, 1, 3])
         with col_b1:
-            if st.button("← Voltar", use_container_width=True):
+            if st.button("Voltar", use_container_width=True):
                 st.session_state["etapa_auditoria"] = 1
                 st.rerun()
         with col_b2:
@@ -389,7 +351,7 @@ with aba2:
     elif passo == 3:
         col_res1, col_res2 = st.columns([5, 1])
         with col_res1:
-            st.markdown("##### Resultado da Análise de Divergências")
+            st.subheader("Relatório de Divergências Encontradas")
             st.caption("Comparativo estruturado entre os registros do arquivo enviado e a base histórica.")
         with col_res2:
             st.button("📥 Exportar CSV", use_container_width=True)
@@ -425,45 +387,26 @@ with aba2:
             val_arq_c2 = campos_linha[1] if len(campos_linha) > 1 else "171"
             val_arq_c3 = campos_linha[2] if len(campos_linha) > 2 else "202600"
 
-            val_hist_c1 = "-"
-            val_hist_c2 = "-"
-            val_hist_c3 = "-"
-
-            with st.container():
-                st.markdown("---")
+            with st.container(border=True):
                 col_head1, col_head2 = st.columns([5, 1])
                 with col_head1:
-                    st.markdown(f"#### Linha {linha_num}")
+                    st.markdown(f"**Linha {linha_num}**")
                 with col_head2:
-                    st.markdown("<div style='background: rgba(239, 68, 68, 0.15); color: #F87171; padding: 4px 8px; border-radius: 6px; font-weight: 700; font-size: 11px; text-align: center; border: 1px solid rgba(239, 68, 68, 0.3);'>Registro Inexistente</div>", unsafe_allow_html=True)
+                    st.error("Inexistente")
                 
                 nomes_colunas = layout_atual["campos"]
                 cols_ui = st.columns(len(nomes_colunas))
                 
                 valores_arquivo = [val_arq_c1, val_arq_c2, val_arq_c3]
-                valores_historico = [val_hist_c1, val_hist_c2, val_hist_c3]
                 
                 for idx, col_ui in enumerate(cols_ui):
                     nome_col_atual = nomes_colunas[idx] if idx < len(nomes_colunas) else f"Campo {idx+1}"
                     v_arq = valores_arquivo[idx] if idx < len(valores_arquivo) else "-"
-                    v_hist = valores_historico[idx] if idx < len(valores_historico) else "-"
                     
                     with col_ui:
-                        st.markdown(f"""
-                            <div class='audit-card'>
-                                <div style='color: #94A3B8; font-weight: 700; font-size: 11px; letter-spacing: 0.05em; margin-bottom: 8px;'>{nome_col_atual.upper()}</div>
-                                <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;'>
-                                    <span style='color: #64748B;'>Arquivo:</span>
-                                    <span style='color: #F87171; font-weight: 600;'>{v_arq}</span>
-                                </div>
-                                <div style='display: flex; justify-content: space-between; font-size: 13px;'>
-                                    <span style='color: #64748B;'>Histórico:</span>
-                                    <span style='color: #F8FAFC; font-weight: 600;'>{v_hist}</span>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
+                        st.metric(label=nome_col_atual, value=v_arq, delta="Divergente", delta_color="inverse")
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("---")
         col_nova_analise, _ = st.columns([2, 5])
         with col_nova_analise:
             if st.button("🔄 Realizar Nova Análise", type="primary", use_container_width=True):
@@ -471,7 +414,8 @@ with aba2:
                 st.rerun()
 
 with aba3:
-    st.markdown("##### 📚 Histórico Registrado de Casos")
+    st.subheader("Histórico Registrado de Casos")
+    st.caption("Consulta de ocorrências previamente diagnosticadas e armazenadas.")
     historico = st.session_state["historico_casos"]
     if not historico:
         st.info("Nenhum caso catalogado ainda.")
@@ -482,5 +426,5 @@ with aba3:
                 st.markdown(item['resposta'])
 
 with aba4:
-    st.markdown("##### 📖 Base de Regras Oficiais do SIM / TCE-CE")
-    st.markdown("Diretrizes de integridade referencial exigidas pelo tribunal.")
+    st.subheader("Base de Regras Oficiais do SIM / TCE-CE")
+    st.markdown("Diretrizes de integridade referencial e validações normativas exigidas pelo tribunal.")
