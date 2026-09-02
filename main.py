@@ -120,10 +120,6 @@ class AuditoriaTCEAPI:
         })
 
     def consultar_endpoint(self, endpoint: str, parametros: dict = None, limite_maximo: int = 5000) -> pd.DataFrame:
-        """
-        Consulta um endpoint do SIM com paginação automática ($start_index)
-        e retorna um DataFrame do pandas consolidado, respeitando o limite de 1000 registros por chamada.
-        """
         if parametros is None:
             parametros = {}
             
@@ -220,7 +216,8 @@ def chamar_gemini_seguro(prompt_usuario):
     3. 🔍 **Validação Técnica / SQL sugerido**: Dica de campo ou consulta para rastrear o registro problemático na base local antes de retransmitir.
     """
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=prompt_sistema)
+        # Atualizado para utilizar o modelo estável compatível com a API atual
+        model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=prompt_sistema)
         response = model.generate_content(prompt_usuario)
         if response and response.text:
             return response.text, "Alta"
