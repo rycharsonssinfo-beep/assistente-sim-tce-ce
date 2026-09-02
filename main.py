@@ -216,8 +216,8 @@ def chamar_gemini_seguro(prompt_usuario):
     3. 🔍 **Validação Técnica / SQL sugerido**: Dica de campo ou consulta para rastrear o registro problemático na base local antes de retransmitir.
     """
     try:
-        # Alterado para 'gemini-flash' (modelo padrão compatível com a biblioteca atual)
-        model = genai.GenerativeModel("gemini-flash", system_instruction=prompt_sistema)
+        # Alterado para 'gemini-pro' que é suportado de forma universal na API atual do SDK python
+        model = genai.GenerativeModel("gemini-pro", system_instruction=prompt_sistema)
         response = model.generate_content(prompt_usuario)
         if response and response.text:
             return response.text, "Alta"
