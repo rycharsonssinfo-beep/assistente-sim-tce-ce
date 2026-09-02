@@ -373,7 +373,7 @@ with aba2:
                 st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório de Divergências: Cruzamento Real com a API do TCE-CE")
+        st.markdown("##### 3. Relatório de Divergências: Cruzamento Estrito com a API do TCE-CE")
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         nome_arq = arq_obj.name if arq_obj else "Arquivo"
         linhas_locais = st.session_state.get("linhas_arquivo_local", [])
@@ -389,16 +389,33 @@ with aba2:
         for num_linha in alvos:
             if 0 < num_linha <= len(linhas_locais):
                 conteudo_linha = linhas_locais[num_linha - 1]
-                campos_linha = [c.strip('"') for c in conteudo_linha.split(",")]
+                campos_linha = [c.strip('"').strip() for c in conteudo_linha.split(",")]
                 
-                encontrou = any(campo.lower() in str(dados_api).lower() for campo in campos_linha if len(campo) > 2) if dados_api else False
+                # Validação estrita por chaves/colunas comuns da API caso existam registros
+                encontrou = False
+                if dados_api and len(campos_linha) >= 3:
+                    # Exemplo: testa se o valor da unidade orçamentária (índice 2 geralmente) existe estritamente em chaves específicas da API
+                    val_unidade = campos_linha[2] if len(campos_linha) > 2 else ""
+                    
+                    # Procura em chaves que contenham 'unid', 'orgao' ou 'municipio' nos registros retornados
+                    for reg in dados_api:
+                        match_parcial = any(
+                            val_unidade.lower() == str(v).lower() 
+                            for k, v in reg.items() 
+                            if any(k_termo in k.lower() for k_termo in ['unid', 'orgao', 'municipio', 'unidade'])
+                        )
+                        if match_parcial:
+                            encontrou = True
+                            break
+                else:
+                    encontrou = False
 
                 if dados_api and encontrou:
                     status_val = "✅ Compatível com os dados reais da API"
                     acao_val = "Nenhuma ação necessária."
                 elif dados_api and not encontrou:
-                    status_val = "❌ Divergente / Não localizado na API"
-                    acao_val = "Verificar se o registro foi transmitido corretamente."
+                    status_val = "❌ Divergente / Não localizado na API (Chave Inválida)"
+                    acao_val = "O valor inserido (ex: Unidade Orçamentária) não confere com os registros oficiais da API."
                 else:
                     status_val = "⚠️ API Indisponível / Sem Retorno para Cruzamento"
                     acao_val = "Validar parâmetros obrigatórios (Código do Município e Data de Referência)."
