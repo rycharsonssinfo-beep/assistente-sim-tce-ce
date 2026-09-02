@@ -9,12 +9,13 @@ import google.generativeai as genai
 # 1. CONFIGURAÇÃO DA PÁGINA (DESIGN SYSTEM CORPORATIVO)
 # ==========================================
 st.set_page_config(
-    page_title="Consulta TCE - Análise de Divergências",
+    page_title="Consulta TCE — Análise de Divergências",
     page_icon="🛡️",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Injeção mínima e ultra-limpa focada exclusivamente em superfícies e tipografia global
+# Injeção mínima e ultra-limpa focada exclusivamente em superfícies e tipografia global (Dark Mode Premium 2026)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
@@ -23,6 +24,7 @@ st.markdown("""
         --bg-app: #090D16;
         --surface-sidebar: #0E1320;
         --surface-card: #131B2E;
+        --surface-card-hover: #1A233A;
         --border-subtle: rgba(255, 255, 255, 0.06);
         --border-strong: rgba(255, 255, 255, 0.12);
         --text-main: #F1F5F9;
@@ -38,21 +40,23 @@ st.markdown("""
         color: var(--text-main);
     }
 
-    /* Ajuste estrutural do container principal para evitar desperdício excessivo de margens */
+    /* Otimização da largura e espaçamento do workspace principal */
     .block-container {
-        padding-top: 2.5rem;
+        padding-top: 2rem;
         padding-bottom: 4rem;
-        max-width: 1400px;
+        max-width: 1500px;
+        padding-left: 2.5rem;
+        padding-right: 2.5rem;
     }
 
-    /* Tipografia refinada */
+    /* Tipografia de alta precisão corporativa */
     h1, h2, h3, h4 {
         color: var(--text-main) !important;
         font-family: 'Plus Jakarta Sans', sans-serif !important;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.025em;
     }
 
-    /* Sidebar corporativa limpa */
+    /* Sidebar minimalista estilo SaaS moderno (Linear / Vercel style) */
     section[data-testid="stSidebar"] {
         background-color: var(--surface-sidebar) !important;
         border-right: 1px solid var(--border-subtle);
@@ -60,38 +64,35 @@ st.markdown("""
     
     section[data-testid="stSidebar"] .block-container {
         padding-top: 2rem;
-        padding-left: 1.2rem;
-        padding-right: 1.2rem;
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
     }
 
-    /* Caixas de métricas discretas e elegantes na sidebar */
-    [data-testid="stMetric"] {
-        background-color: var(--surface-card);
-        border: 1px solid var(--border-subtle);
-        padding: 12px 16px;
-        border-radius: 8px;
-    }
-    [data-testid="stMetricValue"] {
-        color: var(--text-main) !important;
-        font-size: 1.5rem !important;
-        font-weight: 700;
-    }
-    [data-testid="stMetricLabel"] {
-        color: var(--text-muted) !important;
-        font-size: 0.8rem !important;
-    }
-
-    /* Ajuste visual para textareas e uploader nativos */
-    .stTextArea textarea {
-        background-color: var(--surface-card) !important;
+    /* Campos de texto e Inputs refinados sem bordas agressivas */
+    .stTextArea textarea, .stTextInput input {
+        background-color: #0B101D !important;
         border: 1px solid var(--border-strong) !important;
         color: var(--text-main) !important;
-        border-radius: 8px !important;
-        font-size: 0.95rem !important;
+        border-radius: 6px !important;
+        font-size: 0.92rem !important;
+        padding: 12px !important;
     }
-    .stTextArea textarea:focus {
+    .stTextArea textarea:focus, .stTextInput input:focus {
         border-color: var(--accent) !important;
         box-shadow: 0 0 0 1px var(--accent) !important;
+    }
+
+    /* Ajuste elegante para botões primários */
+    .stButton button[kind="primary"] {
+        background-color: var(--accent) !important;
+        border: none !important;
+        border-radius: 6px !important;
+        font-weight: 600 !important;
+        color: #ffffff !important;
+        transition: background-color 0.2s ease;
+    }
+    .stButton button[kind="primary"]:hover {
+        background-color: var(--accent-hover) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -221,17 +222,33 @@ Ocorreu um limite temporário de requisições na API do Gemini (`429 Quota Exce
     return "Não foi possível gerar resposta.", "Média"
 
 # ==========================================
-# 5. SIDEBAR SAAS MODERNA
+# 5. SIDEBAR SAAS MODERNA (ESTILO LINEAR/VERCEL)
 # ==========================================
 with st.sidebar:
-    st.markdown("### 🛡️ Consulta TCE")
-    st.caption("Plataforma de Auditoria Municipal")
+    st.markdown("""
+        <div style='padding-bottom: 0.5rem;'>
+            <div style='font-size: 0.95rem; font-weight: 700; color: #F1F5F9; display: flex; align-items: center; gap: 8px;'>
+                <span>🛡️</span> Consulta TCE
+            </div>
+            <div style='font-size: 0.78rem; color: #94A3B8; margin-top: 2px;'>Plataforma de Auditoria Municipal</div>
+        </div>
+    """, unsafe_allow_html=True)
     
-    st.markdown("---")
-    st.metric(label="Casos Catalogados", value=len(st.session_state['historico_casos']))
+    st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
     
-    st.markdown("---")
-    st.markdown("##### Gerenciamento")
+    st.markdown("<div style='font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;'>Workspace</div>", unsafe_allow_html=True)
+    
+    # Indicador sutil de casos catalogados na sidebar (substituindo o card pesado)
+    total_casos = len(st.session_state['historico_casos'])
+    st.markdown(f"""
+        <div style='background-color: #131B2E; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;'>
+            <span style='font-size: 0.8rem; color: #94A3B8;'>Casos Catalogados</span>
+            <span style='font-size: 0.85rem; font-weight: 600; color: #F1F5F9;'>{total_casos}</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<div style='font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;'>Gerenciamento</div>", unsafe_allow_html=True)
+    
     st.download_button(
         "📥 Exportar Backup (.JSON)", 
         data=exportar_base_json(), 
@@ -240,7 +257,8 @@ with st.sidebar:
         use_container_width=True
     )
     
-    st.markdown("---")
+    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
+    
     st.markdown(
         "<div style='font-size: 0.75rem; color: #64748B; line-height: 1.4;'>"
         "<strong>Sistema Integrado Municipal</strong><br>"
@@ -251,17 +269,18 @@ with st.sidebar:
     )
 
 # ==========================================
-# 6. HEADER PRINCIPAL
+# 6. HEADER PRINCIPAL / CONTEXTO DA APLICAÇÃO
 # ==========================================
 st.markdown("""
-    <div style='margin-bottom: 2rem;'>
-        <h1 style='font-size: 1.85rem; font-weight: 700; margin-bottom: 0.2rem;'>Consulta TCE — Análise de Divergências</h1>
-        <p style='color: #94A3B8; font-size: 0.95rem; margin: 0;'>Plataforma corporativa de auditoria inteligente de arquivos de remessa municipal.</p>
+    <div style='margin-bottom: 1.5rem;'>
+        <div style='font-size: 0.75rem; font-weight: 600; color: #2563EB; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;'>Auditoria Municipal SIM</div>
+        <h1 style='font-size: 1.75rem; font-weight: 700; margin-bottom: 0.2rem;'>Consulta TCE — Análise de Divergências</h1>
+        <p style='color: #94A3B8; font-size: 0.92rem; margin: 0;'>Ambiente corporativo para diagnóstico e rastreabilidade de inconsistências em arquivos de remessa.</p>
     </div>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 7. NAVEGAÇÃO ENTRE AS SEÇÕES (ABAS NATIVAS REFINADAS)
+# 7. NAVEGAÇÃO ENTRE AS SEÇÕES (WORKFLOW REFINADO)
 # ==========================================
 aba1, aba2, aba3, aba4 = st.tabs([
     "🔍 Diagnóstico de Ocorrências", 
@@ -271,12 +290,16 @@ aba1, aba2, aba3, aba4 = st.tabs([
 ])
 
 with aba1:
-    st.markdown("### Diagnóstico Inteligente com Mapeamento Oficial")
-    st.markdown("<p style='color: #94A3B8; font-size: 0.9rem; margin-top: -10px;'>Cole o relatório de erro ou inconsistência do SIM para análise imediata da causa raiz.</p>", unsafe_allow_html=True)
+    st.markdown("""
+        <div style='margin-bottom: 1rem;'>
+            <h3 style='font-size: 1.15rem; font-weight: 600; margin-bottom: 0.2rem;'>Diagnóstico Inteligente com Mapeamento Oficial</h3>
+            <p style='color: #94A3B8; font-size: 0.88rem; margin: 0;'>Cole o relatório de erro ou inconsistência do SIM para análise imediata da causa raiz estruturada.</p>
+        </div>
+    """, unsafe_allow_html=True)
     
     user_input = st.text_area(
         "Relatório de ocorrência", 
-        height=140, 
+        height=130, 
         placeholder="Cole aqui o relatório de erro do sistema SIM (Ex: LCO2026.TXT - Erro na linha 311)...",
         label_visibility="collapsed"
     )
@@ -290,7 +313,7 @@ with aba1:
             with st.spinner("Processando auditoria inteligente..."):
                 sigla_arq, modulo_identificado = classificar_erro(user_input)
                 resposta_ia, conf = chamar_gemini_seguro(user_input)
-                st.markdown("---")
+                st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
                 st.markdown(resposta_ia)
                 salvar_caso_db(user_input, resposta_ia, confianca=conf, modulo=modulo_identificado, arquivo=f".{sigla_arq}")
                 st.session_state["historico_casos"] = carregar_historico_db()
@@ -310,7 +333,7 @@ with aba2:
     with c3:
         st.markdown(f"{'🔵 **3. Relatório de Divergências**' if passo == 3 else '3. Relatório de Divergências'}")
 
-    st.markdown("---")
+    st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
 
     if passo == 1:
         st.subheader("Definição de Linhas Inconsistentes")
@@ -406,7 +429,7 @@ with aba2:
                     with col_ui:
                         st.metric(label=nome_col_atual, value=v_arq, delta="Divergente", delta_color="inverse")
 
-        st.markdown("---")
+        st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
         col_nova_analise, _ = st.columns([2, 5])
         with col_nova_analise:
             if st.button("🔄 Realizar Nova Análise", type="primary", use_container_width=True):
