@@ -300,20 +300,7 @@ with aba2:
                     }
                     df_api = cliente_api.consultar_com_fallback(endpoints_possiveis, params)
                     
-                    # Se a API estiver offline ou vazia, gera base de teste estruturada separada do arquivo para não duplicar valores cegos
-                    if df_api.empty and linhas_lidas:
-                        mock_registros = []
-                        for idx, linha in enumerate(linhas_lidas[:50]):
-                            partes = [p.strip('"').strip() for p in linha.split(",")]
-                            if len(partes) >= 3:
-                                # Simula dados históricos com variação controlada para validação correta de divergência
-                                mock_registros.append({
-                                    "campo_1": str(int(partes[0]) - 1 if partes[0].isdigit() else partes[0]),
-                                    "campo_2": partes[1],
-                                    "campo_3": partes[2]
-                                })
-                        df_api = pd.DataFrame(mock_registros)
-
+                    # Sem mock cego: se a API estiver vazia, o histórico reflete que não há registros correspondentes na base externa
                     st.session_state["dados_api_retorno"] = df_api.to_dict(orient="records") if not df_api.empty else []
 
                 st.session_state["etapa_auditoria"] = 3
@@ -343,25 +330,29 @@ with aba2:
             else:
                 continue
 
-            # Pega o registro correspondente no histórico/API com base na linha ou índice
-            idx_reg = (linha_num - 1) % len(dados_api) if dados_api else 0
-            reg_historico = dados_api[idx_reg] if dados_api else {}
+            # Busca correspondência real baseada no primeiro campo (ex: número do documento/empenho)
+            reg_historico = {}
+            val_arquivo_chave = campos_linha[0] if campos_linha else ""
             
-            valores_hist_lista = list(reg_historico.values()) if reg_historico else ["-", "-", "-"]
+            for reg in dados_api:
+                valores_reg = [str(v).strip() for v in reg.values() if v is not None]
+                if val_arquivo_chave in valores_reg:
+                    reg_historico = reg
+                    break
+            
+            # Se não achar por chave exata mas houver dados, pega pelo índice correspondente se houver
+            if not reg_historico and dados_api:
+                idx_reg = (linha_num - 1) % len(dados_api)
+                reg_historico = dados_api[idx_reg]
 
+            valores_hist_lista = list(reg_historico.values()) if reg_historico else []
             nomes_colunas = layout_atual["campos"]
             
-            # Verifica se há divergência real entre os campos do arquivo e do histórico
-            is_erro = False
-            for idx in range(len(nomes_colunas)):
-                val_arq = campos_linha[idx] if idx < len(campos_linha) else "-"
-                val_hist = str(valores_hist_lista[idx]) if idx < len(valores_hist_lista) else "-"
-                if val_arq != val_hist:
-                    is_erro = True
-
+            is_erro = not reg_historico or len(reg_historico) == 0
+            
             termo_modulo = layout_atual['nome'].split()[0]
             status_cor = "#EF4444" if is_erro else "#059669"
-            status_texto = f"{termo_modulo} não encontrado" if is_erro else f"{termo_modulo} localizado"
+            status_texto = f"{termo_modulo} não encontrado na API" if is_erro else f"{termo_modulo} localizado"
             
             with st.container():
                 st.markdown("---")
@@ -376,13 +367,15 @@ with aba2:
                 for idx, col_ui in enumerate(cols_ui):
                     nome_coluna_atual = nomes_colunas[idx] if idx < len(nomes_colunas) else f"Campo {idx+1}"
                     val_arquivo = campos_linha[idx] if idx < len(campos_linha) else "-"
-                    val_historico = str(valores_hist_lista[idx]) if idx < len(valores_hist_lista) else "-"
+                    val_historico = str(valores_hist_lista[idx]) if idx < len(valores_hist_lista) else "Não disponível na API"
+                    
+                    divergente = (val_historico != "Não disponível na API" and val_arquivo != val_historico)
                     
                     with col_ui:
                         st.markdown(f"""
                             <div style='border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; background: #FFF; min-height: 90px;'>
                                 <small style='color: #64748B; font-weight: bold;'>{nome_coluna_atual.upper()}</small><br>
-                                <div style='margin-top: 4px;'><b>Arquivo:</b> <span style='color: {"red" if val_arquivo != val_historico else "black"}'>{val_arquivo}</span></div>
+                                <div style='margin-top: 4px;'><b>Arquivo:</b> <span style='color: {"red" if divergente or is_erro else "black"}'>{val_arquivo}</span></div>
                                 <div style='margin-top: 2px;'><small style='color: #64748B;'>Histórico: {val_historico}</small></div>
                             </div>
                         """, unsafe_allow_html=True)
