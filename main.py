@@ -212,6 +212,8 @@ def classificar_erro(texto):
         modulo = "Recursos Humanos / Pessoal"
     elif "orçamento" in t_lower or "bas" in t_lower:
         modulo = "Cadastros Básicos / Orçamento"
+    elif "empenho" in t_lower or "ne" in t_lower or "dcd" in t_lower:
+        modulo = "Notas de Empenho / Despesas"
     return sigla_encontrada, modulo
 
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
@@ -267,7 +269,7 @@ aba1, aba2, aba3, aba4, aba5 = st.tabs([
 
 with aba1:
     st.markdown("##### 🔍 Diagnóstico Inteligente com Mapeamento de Layout Oficial")
-    user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: CM202607.VCL - CONTROLE DE MANUTENÇÃO DE VEÍCULOS... Descrição: Não há relação com o(s) campo(s)...")
+    user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: NE202607.DCD - NOTAS DE EMPENHO... Descrição: Não há relação com o(s) campo(s)...")
     
     if st.button("Analisar com Layout Oficial", type="primary", use_container_width=True):
         if user_input.strip():
@@ -308,7 +310,6 @@ with aba2:
             arquivo_secundario = st.file_uploader("Arquivo Complementar opcional (.DCD, .NE, etc.)", type=["dcd", "ne", "lco", "bas", "vcl", "pat", "txt", "csv"])
 
         if st.button("Avançar para Parâmetros da API →", type="primary"):
-            # Aceita arquivo principal ou complementar caso o usuário envie em qualquer um deles
             arquivo_escolhido = arquivo_auditoria if arquivo_auditoria else arquivo_secundario
             
             if not arquivo_escolhido:
@@ -328,20 +329,19 @@ with aba2:
             endpoint_metodo = st.selectbox(
                 "Recurso / Endpoint Oficial da API", 
                 [
-                    "veiculos_municipais", 
-                    "veiculos_locados", 
-                    "veiculos_cedidos_terceiros", 
-                    "destinacao_veiculos", 
-                    "baixa_destinacao_veiculos", 
-                    "controle_abastecimento_veiculos", 
-                    "controle_manutencao_veiculos",
+                    "notas_empenho", 
+                    "empenhos", 
+                    "documentos_despesa", 
+                    "despesas", 
                     "contratos",
                     "licitacoes",
                     "aditivos_contratos",
                     "unidades_orcamentarias",
                     "orgaos",
                     "fontes_recursos",
-                    "bens_patrimoniais"
+                    "bens_patrimoniais",
+                    "veiculos_municipais", 
+                    "veiculos_locados"
                 ]
             )
         with col_c2:
@@ -460,9 +460,9 @@ with aba4:
     st.markdown("##### 📖 Base de Regras Oficiais do SIM / TCE-CE")
     st.markdown("""
     Abaixo estão as principais diretrizes de integridade referencial exigidas pelo tribunal:
-    * **Integridade de Frotas (.VCL):** Exige prévia existência da Unidade Orçamentária e, em caso de manutenção/abastecimento, o vínculo com a respectiva Nota de Empenho (`NOTAS_EMPENHOS`).
+    * **Integridade de Notas de Empenho (.DCD / .NE):** Exige validação prévia de créditos orçamentários, dotação e fornecedor cadastrado.
+    * **Integridade de Frotas (.VCL):** Exige prévia existência da Unidade Orçamentária e vínculo com a respectiva Nota de Empenho (`NOTAS_EMPENHOS`).
     * **Contratos (.LCO):** Devem referenciar corretamente as licitações vigentes e CPFs de gestores cadastrados no módulo de Pessoal.
-    * **Cadastros Básicos (.BAS):** Base primária de estruturação orçamentária que deve ser consolidada antes de qualquer movimentação de frotas ou despesas.
     """)
 
 with aba5:
@@ -489,9 +489,9 @@ with aba5:
     [1. CADASTROS BÁSICOS (.BAS)] ──> Define Órgãos e Unidades Orçamentárias
         │
         ▼
-    [2. CONTRATOS & LICITAÇÕES (.LCO)] ──> Valida Empenhos e Fornecedores
+    [2. NOTAS DE EMPENHO (.NE / .DCD)] ──> Valida Dotação e Credores
         │
         ▼
-    [3. FROTA E VEÍCULOS (.VCL)] ──> Exige Vínculo com UO e Empenhos de Manutenção/Abastecimento
+    [3. CONTRATOS & FROTA (.LCO / .VCL)] ──> Exige Vínculo com Empenhos e Licitações
     ```
     """)
