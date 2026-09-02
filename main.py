@@ -410,11 +410,21 @@ with aba2:
                 continue
 
             campos_divergentes = 0
+            val_historico_encontrado = "-"
+            
             for campo in campos_linha:
-                if campo.lower() and valores_api_geral and campo.lower() not in valores_api_geral:
-                    campos_divergentes += 1
+                campo_limpo = campo.lower()
+                if campo_limpo and valores_api_geral:
+                    if campo_limpo not in valores_api_geral:
+                        campos_divergentes += 1
+                    else:
+                        for reg in dados_api:
+                            for k, v in reg.items():
+                                if v is not None and str(v).strip().lower() == campo_limpo:
+                                    val_historico_encontrado = str(v)
+                                    break
 
-            is_erro = (not dados_api) or (campos_divergentes > 0) or (linha_num in [5, 9])
+            is_erro = (not dados_api) or (campos_divergentes > 0)
             
             termo_modulo = layout_atual['nome'].split()[0]
             status_cor = "#EF4444" if is_erro else "#059669"
@@ -434,7 +444,7 @@ with aba2:
                 for idx, col_ui in enumerate(cols_ui):
                     nome_coluna_atual = nomes_colunas[idx] if idx < len(nomes_colunas) else f"Campo {idx+1}"
                     val_arquivo = campos_linha[idx] if idx < len(campos_linha) else "-"
-                    val_historico = val_arquivo if not is_erro else "-"
+                    val_historico = val_historico_encontrado if not is_erro else "-"
                     
                     with col_ui:
                         st.markdown(f"""
