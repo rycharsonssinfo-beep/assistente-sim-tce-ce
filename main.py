@@ -216,7 +216,6 @@ def chamar_gemini_seguro(prompt_usuario):
     3. 🔍 **Validação Técnica / SQL sugerido**: Dica de campo ou consulta para rastrear o registro problemático na base local antes de retransmitir.
     """
     try:
-        # Atualizado para 'gemini-3.6-flash' conforme recomendado pela API
         model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=prompt_sistema)
         response = model.generate_content(prompt_usuario)
         if response and response.text:
@@ -292,7 +291,6 @@ with aba2:
             endpoint_metodo = st.selectbox(
                 "Recurso / Endpoint Oficial da API", 
                 [
-                    # Módulo: Veículos e Frota
                     "veiculos_municipais", 
                     "veiculos_locados", 
                     "veiculos_cedidos_terceiros", 
@@ -300,18 +298,12 @@ with aba2:
                     "baixa_destinacao_veiculos", 
                     "controle_abastecimento_veiculos", 
                     "controle_manutencao_veiculos",
-                    
-                    # Módulo: Contratos e Licitações
                     "contratos",
                     "licitacoes",
                     "aditivos_contratos",
-                    
-                    # Módulo: Cadastros Básicos e Orçamento
                     "unidades_orcamentarias",
                     "orgaos",
                     "fontes_recursos",
-                    
-                    # Módulo: Patrimônio e Bens
                     "bens_patrimoniais"
                 ]
             )
@@ -373,7 +365,7 @@ with aba2:
                 st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório de Divergências: Cruzamento Estrito com a API do TCE-CE")
+        st.markdown("##### 3. Relatório de Divergências: Cruzamento Robusto com a API do TCE-CE")
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         nome_arq = arq_obj.name if arq_obj else "Arquivo"
         linhas_locais = st.session_state.get("linhas_arquivo_local", [])
@@ -391,31 +383,22 @@ with aba2:
                 conteudo_linha = linhas_locais[num_linha - 1]
                 campos_linha = [c.strip('"').strip() for c in conteudo_linha.split(",")]
                 
-                # Validação estrita por chaves/colunas comuns da API caso existam registros
+                # Validação robusta atualizada: verifica se os tokens da linha existem em qualquer campo da API
                 encontrou = False
-                if dados_api and len(campos_linha) >= 3:
-                    # Exemplo: testa se o valor da unidade orçamentária (índice 2 geralmente) existe estritamente em chaves específicas da API
-                    val_unidade = campos_linha[2] if len(campos_linha) > 2 else ""
-                    
-                    # Procura em chaves que contenham 'unid', 'orgao' ou 'municipio' nos registros retornados
+                if dados_api:
+                    tokens_linha = [c.lower() for c in campos_linha if len(c.strip()) > 1]
                     for reg in dados_api:
-                        match_parcial = any(
-                            val_unidade.lower() == str(v).lower() 
-                            for k, v in reg.items() 
-                            if any(k_termo in k.lower() for k_termo in ['unid', 'orgao', 'municipio', 'unidade'])
-                        )
-                        if match_parcial:
+                        valores_reg = [str(v).lower() for v in reg.values() if v is not None]
+                        if any(token in val for token in tokens_linha for val in valores_reg):
                             encontrou = True
                             break
-                else:
-                    encontrou = False
 
                 if dados_api and encontrou:
                     status_val = "✅ Compatível com os dados reais da API"
                     acao_val = "Nenhuma ação necessária."
                 elif dados_api and not encontrou:
-                    status_val = "❌ Divergente / Não localizado na API (Chave Inválida)"
-                    acao_val = "O valor inserido (ex: Unidade Orçamentária) não confere com os registros oficiais da API."
+                    status_val = "❌ Divergente / Não localizado na API"
+                    acao_val = "O registro inserido não confere com os dados oficiais da API."
                 else:
                     status_val = "⚠️ API Indisponível / Sem Retorno para Cruzamento"
                     acao_val = "Validar parâmetros obrigatórios (Código do Município e Data de Referência)."
