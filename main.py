@@ -216,8 +216,8 @@ def chamar_gemini_seguro(prompt_usuario):
     3. 🔍 **Validação Técnica / SQL sugerido**: Dica de campo ou consulta para rastrear o registro problemático na base local antes de retransmitir.
     """
     try:
-        # Utilizando o modelo gemini-1.5-flash para alta velocidade e respostas imediatas
-        model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=prompt_sistema)
+        # Alterado para 'gemini-flash' (modelo padrão compatível com a biblioteca atual)
+        model = genai.GenerativeModel("gemini-flash", system_instruction=prompt_sistema)
         response = model.generate_content(prompt_usuario)
         if response and response.text:
             return response.text, "Alta"
@@ -442,7 +442,7 @@ with aba5:
     st.markdown("##### 🕸️ Carga Completa & Fluxograma de Dependências")
     st.markdown("Envie múltiplos arquivos para validação em lote da estrutura relacional do SIM.")
     
-    arquivos_lote = st.file_uploader("Selecione múltiplos arquivos do SIM", type=["lco", "bas", "vcl", "pat", "txt", "csv"], accept_multiple_files=True)
+    arquivos_lote = st.file_uploader("Selecione múltiplos arquivos do SIM", type=["lco", "bas", "vcls", "vcl", "pat", "txt", "csv"], accept_multiple_files=True)
     if arquivos_lote:
         resumo_lote = []
         for arq in arquivos_lote:
