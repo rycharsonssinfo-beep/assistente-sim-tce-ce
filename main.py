@@ -397,14 +397,17 @@ with aba2:
                 if v is not None:
                     valores_api_geral.add(str(v).strip().lower())
 
-        linhas_alvo = [int(m) for m in re.findall(r'(\d+)', relatorio_input)] if relatorio_input else list(range(1, min(len(linhas_locais) + 1, 11)))
+        if relatorio_input.strip():
+            linhas_alvo = [int(m) for m in re.findall(r'(\d+)', relatorio_input)]
+        else:
+            linhas_alvo = list(range(1, len(linhas_locais) + 1))
 
         for linha_num in linhas_alvo:
             if 0 < linha_num <= len(linhas_locais):
                 conteudo_linha = linhas_locais[linha_num - 1]
                 campos_linha = [c.strip('"').strip() for c in conteudo_linha.split(",")]
             else:
-                campos_linha = ["valor_exemplo_1", "valor_exemplo_2", "valor_exemplo_3"]
+                continue
 
             campos_divergentes = 0
             for campo in campos_linha:
@@ -412,8 +415,10 @@ with aba2:
                     campos_divergentes += 1
 
             is_erro = (not dados_api) or (campos_divergentes > 0) or (linha_num in [5, 9])
+            
+            termo_modulo = layout_atual['nome'].split()[0]
             status_cor = "#EF4444" if is_erro else "#059669"
-            status_texto = f"{layout_atual['nome'].split()[0]} divergente" if is_erro else f"{layout_atual['nome'].split()[0]} localizado"
+            status_texto = f"{termo_modulo} não encontrado" if is_erro else f"{termo_modulo} localizado"
             
             with st.container():
                 st.markdown("---")
@@ -429,14 +434,14 @@ with aba2:
                 for idx, col_ui in enumerate(cols_ui):
                     nome_coluna_atual = nomes_colunas[idx] if idx < len(nomes_colunas) else f"Campo {idx+1}"
                     val_arquivo = campos_linha[idx] if idx < len(campos_linha) else "-"
-                    val_historico = "-" if is_erro else val_arquivo
+                    val_historico = val_arquivo if not is_erro else "-"
                     
                     with col_ui:
                         st.markdown(f"""
                             <div style='border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; background: #FFF; min-height: 90px;'>
                                 <small style='color: #64748B; font-weight: bold;'>{nome_coluna_atual.upper()}</small><br>
-                                <div style='margin-top: 4px;'><b>Arquivo:</b> <span style='color: {"red" if is_erro and idx==0 else "black"}'>{val_arquivo}</span></div>
-                                <div style='margin-top: 2px;'><small style='color: #64748B;'>Histórico API: {val_historico}</small></div>
+                                <div style='margin-top: 4px;'><b>Arquivo:</b> <span style='color: {"red" if is_erro else "black"}'>{val_arquivo}</span></div>
+                                <div style='margin-top: 2px;'><small style='color: #64748B;'>Histórico: {val_historico}</small></div>
                             </div>
                         """, unsafe_allow_html=True)
 
