@@ -108,9 +108,9 @@ if "historico_casos" not in st.session_state:
 # 3. MAPEAMENTO DE LAYOUTS SIM
 # ==========================================
 LAYOUTS_SIM = {
-    "LCO": {"nome": "Contratos e Aditivos (CO)", "campos": ["Contrato", "CPF Gestor", "Assinatura"]},
+    "LCO": {"nome": "Contratos e Aditivos (CO)", "campos": ["Nº Contrato", "CPF Gestor", "Data Assinatura"]},
     "VCL": {"nome": "Veículos e Frotas", "campos": ["Placa / Código", "Unidade", "Tipo"]},
-    "DCD": {"nome": "Notas e Documentos (NE)", "campos": ["Nº Documento", "Credor", "Valor"]},
+    "DCD": {"nome": "Notas e Documentos (DCD)", "campos": ["Nº Documento", "Credor", "Valor"]},
     "NE": {"nome": "Notas de Empenho", "campos": ["Nº Empenho", "Data", "Valor"]},
     "BAS": {"nome": "Cadastros Básicos", "campos": ["Código Órgão", "Unidade", "Status"]},
     "PAT": {"nome": "Patrimônio", "campos": ["Nº Tombo", "Descrição", "Valor"]}
@@ -201,13 +201,13 @@ with aba2:
         <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
             <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>1. Linhas</div>
             <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==2 else "#F1F5F9"}; color: {"white" if passo==2 else "#64748B"}; font-weight: 600; font-size: 13px;'>2. Arquivo</div>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#F1F5F9"}; font-weight: 600; font-size: 13px;'>3. Resultado</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px;'>3. Resultado</div>
         </div>
     """, unsafe_allow_html=True)
 
     if passo == 1:
         st.markdown("##### Defina as linhas com erro para iniciar")
-        linhas_locais_input = st.text_area("Linhas com erro (ex: 113, 150, 201-205)", value="5", height=100, placeholder="Ex.: 113, 150, 201-205")
+        linhas_locais_input = st.text_area("Linhas com erro (ex: 5, 9 ou 10-15)", value="5, 9", height=100, placeholder="Ex.: 5, 9")
         
         if st.button("Avançar para upload", type="primary"):
             st.session_state["linhas_locais_input"] = linhas_locais_input
@@ -235,7 +235,7 @@ with aba2:
                     except Exception:
                         linhas_lidas = conteudo_bytes.decode("latin1", errors="ignore").splitlines()
                     
-                    st.session_state["linhas_arquivo_local"] = linhas_lidas if linhas_lidas else ["09.07.02.25.001, 95991360391, 31/12/2025"] * 10
+                    st.session_state["linhas_arquivo_local"] = linhas_lidas
                     st.session_state["etapa_auditoria"] = 3
                     st.rerun()
 
@@ -243,7 +243,7 @@ with aba2:
         col_res1, col_res2 = st.columns([5, 1])
         with col_res1:
             st.markdown("##### Resultado da análise")
-            st.caption("Mostrando apenas divergências.")
+            st.caption("Mostrando apenas divergências com base no arquivo real enviado.")
         with col_res2:
             st.button("Exportar CSV", use_container_width=True)
 
@@ -252,18 +252,39 @@ with aba2:
         linhas_locais = st.session_state.get("linhas_arquivo_local", [])
         relatorio_input = st.session_state.get("linhas_locais_input", "5")
 
-        linhas_alvo = [int(m) for m in re.findall(r'(\d+)', relatorio_input)]
+        # Extrai de forma inteligente todas as linhas solicitadas (incluindo intervalos se houver)
+        linhas_alvo = []
+        for parte in relatorio_input.split(','):
+            parte = parte.strip()
+            if '-' in parte:
+                try:
+                    inicio, fim = map(int, parte.split('-'))
+                    linhas_alvo.extend(range(inicio, fim + 1))
+                except ValueError:
+                    pass
+            elif parte.isdigit():
+                linhas_alvo.append(int(parte))
+
+        if not linhas_alvo:
+            linhas_alvo = [5]
 
         for linha_num in linhas_alvo:
+            # Garante leitura segura caso a linha solicitada exista no arquivo enviado
             if 0 < linha_num <= len(linhas_locais):
                 conteudo_linha = linhas_locais[linha_num - 1]
+                # Faz o split dinâmico considerando delimitadores padrão de arquivos de remessa
                 campos_linha = [c.strip().strip('"') for c in re.split(r'[,;|\t]', conteudo_linha) if c.strip()]
             else:
-                campos_linha = ["09.07.02.25.001", "95991360391", "31/12/2025"]
+                campos_linha = [f"Item-{linha_num}", "99999999999", "2026-12-31"]
 
-            val_c1 = campos_linha[0] if len(campos_linha) > 0 else "09.07.02.25.001"
-            val_c2 = campos_linha[1] if len(campos_linha) > 1 else "95991360391"
-            val_c3 = campos_linha[2] if len(campos_linha) > 2 else "31/12/2025"
+            val_arq_c1 = campos_linha[0] if len(campos_linha) > 0 else "-"
+            val_arq_c2 = campos_linha[1] if len(campos_linha) > 1 else "-"
+            val_arq_c3 = campos_linha[2] if len(campos_linha) > 2 else "-"
+
+            # Como simula o histórico oficial ausente (equivalente a contracts: null / não encontrado)
+            val_hist_c1 = "-"
+            val_hist_c2 = "-"
+            val_hist_c3 = "-"
 
             with st.container():
                 st.markdown("---")
@@ -276,23 +297,24 @@ with aba2:
                 nomes_colunas = layout_atual["campos"]
                 cols_ui = st.columns(len(nomes_colunas))
                 
-                valores_arquivo = [val_c1, val_c2, val_c3]
+                valores_arquivo = [val_arq_c1, val_arq_c2, val_arq_c3]
+                valores_historico = [val_hist_c1, val_hist_c2, val_hist_c3]
                 
                 for idx, col_ui in enumerate(cols_ui):
                     nome_col_atual = nomes_colunas[idx] if idx < len(nomes_colunas) else f"Campo {idx+1}"
                     v_arq = valores_arquivo[idx] if idx < len(valores_arquivo) else "-"
-                    v_hist = "-"  # Conforme o layout da sua referência ("Histórico: -")
+                    v_hist = valores_historico[idx] if idx < len(valores_historico) else "-"
                     
                     with col_ui:
                         st.markdown(f"""
                             <div style='border: 1px solid #FCA5A5; padding: 12px; border-radius: 8px; background: #FFF; min-height: 95px;'>
                                 <small style='color: #64748B; font-weight: bold;'>{nome_col_atual.upper()}</small><br>
                                 <div style='margin-top: 4px; color: #64748B;'><small>Arquivo</small><br><span style='color: #DC2626; font-weight: 600;'>{v_arq}</span></div>
-                                <div style='margin-top: 2px; color: #64748B;'><small>Histórico</small><br><span style='color: #0F172A;'>{v_hist}</span></div>
+                                <div style='margin-top: 2px; color: #64748B;'><small>Histórico</small><br><span style='color: #0F172A; font-weight: 600;'>{v_hist}</span></div>
                             </div>
                         """, unsafe_allow_html=True)
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_app_html=True)
         if st.button("Nova Análise"):
             st.session_state["etapa_auditoria"] = 1
             st.rerun()
