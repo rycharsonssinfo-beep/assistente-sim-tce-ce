@@ -431,7 +431,6 @@ elif pagina_selecionada == "Divergências":
         if not linhas_alvo:
             linhas_alvo = [5]
 
-        # Correção aplicada aqui (espaço inserido corretamente em 'in linhas_alvo')
         for linha_num in linhas_alvo:
             if 0 < linha_num <= len(linhas_locais):
                 conteudo_linha = linhas_locais[linha_num - 1]
@@ -475,7 +474,8 @@ elif pagina_selecionada == "Historico":
         st.info("Nenhum caso catalogado ainda.")
     else:
         for item in historico:
-            titulo_caso = f"Caso #{item['id']} — Módulo: {item.get('modulo', 'Geral')}"
+            # Substituído hífen/underline por hífen limpo sem conflito com ícones do Streamlit
+            titulo_caso = f"Caso ID {item['id']} - Modulo {item.get('modulo', 'Geral')}"
             with st.expander(titulo_caso):
                 st.code(item['erro'], language="text")
                 st.markdown(item['resposta'])
