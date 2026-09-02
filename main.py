@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS completa para padronizar a fonte e ocultar textos residuais de ícones do header
+# Injeção CSS completa com correção definitiva para textos de ícones residuais
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -40,16 +40,22 @@ st.markdown("""
         color: var(--text-main) !important;
     }
 
-    /* Oculta de vez qualquer texto de ícone corrompido no cabeçalho ou barra lateral */
-    [data-testid="collapsedControl"] span, [data-testid="stHeader"] span {
+    /* Oculta completamente textos residuais de ícones do cabeçalho e barra lateral */
+    [data-testid="collapsedControl"] span, 
+    [data-testid="stHeader"] span,
+    [data-testid="collapsedControl"] p {
         display: none !important;
     }
     
+    /* Remove o texto de ícone corrompido específico do Material Design */
     [data-testid="collapsedControl"] {
-        opacity: 0.7;
+        font-size: 0px !important;
+        color: transparent !important;
     }
-    [data-testid="collapsedControl"]:hover {
-        opacity: 1;
+    
+    [data-testid="collapsedControl"] svg {
+        font-size: 1.2rem !important;
+        color: var(--text-muted) !important;
     }
 
     .block-container {
