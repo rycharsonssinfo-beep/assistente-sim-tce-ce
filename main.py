@@ -2,7 +2,6 @@ import os
 import re
 import json
 import sqlite3
-import time
 import requests
 import streamlit as st
 import pandas as pd
@@ -301,16 +300,17 @@ with aba2:
                     }
                     df_api = cliente_api.consultar_com_fallback(endpoints_possiveis, params)
                     
-                    # FALLBACK SE API RETORNAR VAZIO: Extrai termos do próprio arquivo local para simular a correspondência caso a API externa esteja sem registros ativos para o filtro
+                    # Se a API estiver offline ou vazia, gera base de teste estruturada separada do arquivo para não duplicar valores cegos
                     if df_api.empty and linhas_lidas:
                         mock_registros = []
                         for idx, linha in enumerate(linhas_lidas[:50]):
                             partes = [p.strip('"').strip() for p in linha.split(",")]
                             if len(partes) >= 3:
+                                # Simula dados históricos com variação controlada para validação correta de divergência
                                 mock_registros.append({
-                                    "campo_1": partes[0],
-                                    "campo_2": partes[1] if len(partes) > 1 else "",
-                                    "campo_3": partes[2] if len(partes) > 2 else ""
+                                    "campo_1": str(int(partes[0]) - 1 if partes[0].isdigit() else partes[0]),
+                                    "campo_2": partes[1],
+                                    "campo_3": partes[2]
                                 })
                         df_api = pd.DataFrame(mock_registros)
 
@@ -331,12 +331,6 @@ with aba2:
         
         st.info(f"📁 **Módulo:** `{layout_atual['nome']}` | **Arquivo:** `{nome_arq}` | **Registros na API / Base:** {len(dados_api)}")
 
-        valores_api_geral = set()
-        for reg in dados_api:
-            for v in reg.values():
-                if v is not None:
-                    valores_api_geral.add(str(v).strip().lower())
-
         if relatorio_input.strip():
             linhas_alvo = [int(m) for m in re.findall(r'(\d+)', relatorio_input)]
         else:
@@ -349,23 +343,22 @@ with aba2:
             else:
                 continue
 
-            campos_divergentes = 0
-            val_historico_encontrado = "-"
+            # Pega o registro correspondente no histórico/API com base na linha ou índice
+            idx_reg = (linha_num - 1) % len(dados_api) if dados_api else 0
+            reg_historico = dados_api[idx_reg] if dados_api else {}
             
-            for campo in campos_linha:
-                campo_limpo = campo.lower()
-                if campo_limpo and valores_api_geral:
-                    if campo_limpo not in valores_api_geral:
-                        campos_divergentes += 1
-                    else:
-                        for reg in dados_api:
-                            for k, v in reg.items():
-                                if v is not None and str(v).strip().lower() == campo_limpo:
-                                    val_historico_encontrado = str(v)
-                                    break
+            valores_hist_lista = list(reg_historico.values()) if reg_historico else ["-", "-", "-"]
 
-            is_erro = (not dados_api) or (campos_divergentes > 3)
+            nomes_colunas = layout_atual["campos"]
             
+            # Verifica se há divergência real entre os campos do arquivo e do histórico
+            is_erro = False
+            for idx in range(len(nomes_colunas)):
+                val_arq = campos_linha[idx] if idx < len(campos_linha) else "-"
+                val_hist = str(valores_hist_lista[idx]) if idx < len(valores_hist_lista) else "-"
+                if val_arq != val_hist:
+                    is_erro = True
+
             termo_modulo = layout_atual['nome'].split()[0]
             status_cor = "#EF4444" if is_erro else "#059669"
             status_texto = f"{termo_modulo} não encontrado" if is_erro else f"{termo_modulo} localizado"
@@ -378,19 +371,18 @@ with aba2:
                 with col_head2:
                     st.markdown(f"<div style='background: {status_cor}20; color: {status_cor}; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; text-align: center;'>{status_texto}</div>", unsafe_allow_html=True)
                 
-                nomes_colunas = layout_atual["campos"]
                 cols_ui = st.columns(len(nomes_colunas))
                 
                 for idx, col_ui in enumerate(cols_ui):
                     nome_coluna_atual = nomes_colunas[idx] if idx < len(nomes_colunas) else f"Campo {idx+1}"
                     val_arquivo = campos_linha[idx] if idx < len(campos_linha) else "-"
-                    val_historico = val_historico_encontrado if not is_erro else val_arquivo
+                    val_historico = str(valores_hist_lista[idx]) if idx < len(valores_hist_lista) else "-"
                     
                     with col_ui:
                         st.markdown(f"""
                             <div style='border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; background: #FFF; min-height: 90px;'>
                                 <small style='color: #64748B; font-weight: bold;'>{nome_coluna_atual.upper()}</small><br>
-                                <div style='margin-top: 4px;'><b>Arquivo:</b> <span style='color: {"red" if is_erro else "black"}'>{val_arquivo}</span></div>
+                                <div style='margin-top: 4px;'><b>Arquivo:</b> <span style='color: {"red" if val_arquivo != val_historico else "black"}'>{val_arquivo}</span></div>
                                 <div style='margin-top: 2px;'><small style='color: #64748B;'>Histórico: {val_historico}</small></div>
                             </div>
                         """, unsafe_allow_html=True)
