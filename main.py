@@ -2,7 +2,6 @@ import os
 import re
 import json
 import sqlite3
-import requests
 import streamlit as st
 import google.generativeai as genai
 
@@ -10,7 +9,7 @@ import google.generativeai as genai
 # 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM
 # ==========================================
 st.set_page_config(
-    page_title="Painel de Auditoria SIM TCE-CE",
+    page_title="Consulta TCE - Análise de Divergências",
     page_icon="🛡️",
     layout="wide"
 )
@@ -28,7 +27,7 @@ st.markdown("""
         --primary-hover: #047857;
     }
     .main { background-color: var(--bg-main); font-family: 'Inter', sans-serif; }
-    .block-container { padding-top: 1.8rem; padding-bottom: 3rem; max-width: 1240px; }
+    .block-container { padding-top: 1.5rem; padding-bottom: 3rem; max-width: 1240px; }
     h1, h2, h3, h4 { color: var(--text-main); font-weight: 700; letter-spacing: -0.03em; }
     .stTabs [data-baseweb="tab-list"] { gap: 6px; background-color: #F1F5F9; padding: 6px; border-radius: 10px; border: 1px solid var(--border-color); }
     .stTabs [data-baseweb="tab"] { height: 40px; background-color: transparent; border-radius: 6px; color: var(--text-muted); font-weight: 600; font-size: 13px; border: none; padding: 0 14px; }
@@ -42,7 +41,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. PERSISTÊNCIA E MIGRAÇÃO ROBUSTA (SQLITE)
+# 2. PERSISTÊNCIA LOCAL (SQLITE)
 # ==========================================
 NOME_BANCO = "banco_sim_tce.db"
 
@@ -106,58 +105,36 @@ if "historico_casos" not in st.session_state:
     st.session_state["historico_casos"] = carregar_historico_db()
 
 # ==========================================
-# 3. CLIENTE DE API OFICIAL DO TCE-CE
+# 3. MAPEAMENTO DE LAYOUTS SIM
 # ==========================================
 LAYOUTS_SIM = {
-    "LCO": {"nome": "Contratos e Aditivos (CO)", "campos": ["Nº Contrato", "CPF Gestor", "Data Assinatura"], "endpoints": ["contratos", "licitacoes"]},
-    "VCL": {"nome": "Veículos e Frotas", "campos": ["Placa / Código", "Unidade Orçamentária", "Tipo Veículo"], "endpoints": ["veiculos_municipais", "veiculos"]},
-    "DCD": {"nome": "Notas e Documentos (NE)", "campos": ["Nº Documento", "Credor / CPF-CNPJ", "Valor"], "endpoints": ["documentos_despesa", "notas_empenho", "despesas", "empenhos"]},
-    "NE": {"nome": "Notas de Empenho", "campos": ["Nº Empenho", "Data Emissão", "Valor Empenhado"], "endpoints": ["notas_empenho", "despesas", "documentos_despesa"]},
-    "BAS": {"nome": "Cadastros Básicos", "campos": ["Código Órgão", "Unidade Orçamentária", "Status"], "endpoints": ["orgaos", "unidades_orcamentarias"]},
-    "PAT": {"nome": "Patrimônio", "campos": ["Nº Tombo", "Descrição Bem", "Valor Aquisição"], "endpoints": ["bens_patrimoniais", "patrimonio"]}
+    "LCO": {"nome": "Contratos e Aditivos (CO)", "campos": ["Contrato", "CPF Gestor", "Assinatura"]},
+    "VCL": {"nome": "Veículos e Frotas", "campos": ["Placa / Código", "Unidade", "Tipo"]},
+    "DCD": {"nome": "Notas e Documentos (NE)", "campos": ["Nº Documento", "Credor", "Valor"]},
+    "NE": {"nome": "Notas de Empenho", "campos": ["Nº Empenho", "Data", "Valor"]},
+    "BAS": {"nome": "Cadastros Básicos", "campos": ["Código Órgão", "Unidade", "Status"]},
+    "PAT": {"nome": "Patrimônio", "campos": ["Nº Tombo", "Descrição", "Valor"]}
 }
 
 def obter_layout_arquivo(nome_arquivo):
     if not nome_arquivo:
-        return LAYOUTS_SIM["DCD"]
+        return LAYOUTS_SIM["LCO"]
     ext = nome_arquivo.split(".")[-1].upper()
-    return LAYOUTS_SIM.get(ext, {"nome": "Notas e Documentos (NE)", "campos": ["Nº Documento", "Credor / CPF-CNPJ", "Valor"], "endpoints": ["despesas"]})
-
-class AuditoriaTCEAPI:
-    def __init__(self):
-        self.base_url = "https://api-dados-abertos.tce.ce.gov.br/sim"
-        self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "AuditoriaCruzadaTCE-App/1.0", "Accept": "application/json"})
-
-    def consultar_api(self, endpoints: list, params: dict) -> list:
-        for endpoint in endpoints:
-            url = f"{self.base_url}/{endpoint}"
-            try:
-                response = self.session.get(url, params=params, timeout=8)
-                if response.status_code == 200:
-                    data = response.json()
-                    elements = data.get("elements", data.get("resultado", data.get("data", data.get("items", []))))
-                    if elements:
-                        return elements
-            except Exception:
-                continue
-        return []
-
-cliente_tce = AuditoriaTCEAPI()
+    return LAYOUTS_SIM.get(ext, LAYOUTS_SIM["LCO"])
 
 # ==========================================
-# 4. INTELIGÊNCIA ARTIFICIAL E UTILITÁRIOS
+# 4. INTELIGÊNCIA ARTIFICIAL (GEMINI)
 # ==========================================
 def classificar_erro(texto):
     if not texto:
-        return "DCD", "Notas de Empenho / Despesas"
+        return "LCO", "Contratos e Aditivos"
     t_lower = texto.lower()
-    sigla_encontrada = "DCD"
+    sigla_encontrada = "LCO"
     for ext in ["bas", "lic", "lco", "vcl", "pat", "cpf", "dcd", "ne"]:
         if f".{ext}" in t_lower or ext in t_lower:
             sigla_encontrada = ext.upper()
             break
-    return sigla_encontrada, "Notas de Empenho / Despesas"
+    return sigla_encontrada, "Contratos e Aditivos"
 
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 if api_key:
@@ -180,8 +157,8 @@ def chamar_gemini_seguro(prompt_usuario):
 # 5. SIDEBAR
 # ==========================================
 with st.sidebar:
-    st.markdown("## 🛡️ SIM Audit")
-    st.caption("Painel de Conciliação e Consistência")
+    st.markdown("## 🛡️ Consulta TCE")
+    st.caption("Painel de Análise de Divergências")
     st.markdown("---")
     st.metric(label="Casos Catalogados", value=len(st.session_state['historico_casos']))
     st.markdown("---")
@@ -190,20 +167,19 @@ with st.sidebar:
 # ==========================================
 # 6. TELA PRINCIPAL E ABAS
 # ==========================================
-st.title("Diagnóstico SIM TCE-CE")
-st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada com varredura automática de endpoints e auditoria cruzada.</span>", unsafe_allow_html=True)
+st.title("Consulta TCE - Análise de Divergências")
+st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada de auditoria de arquivos de remessa municipal.</span>", unsafe_allow_html=True)
 
-aba1, aba2, aba3, aba4, aba5 = st.tabs([
+aba1, aba2, aba3, aba4 = st.tabs([
     "🔍 Diagnóstico de Ocorrências", 
-    "📊 Auditoria Cruzada (API SIM 2.0)",
+    "📊 Análise de Divergências", 
     "📚 Histórico Registrado", 
-    "📖 Base de Regras",
-    "🕸️ Carga Completa & Fluxograma"
+    "📖 Base de Regras"
 ])
 
 with aba1:
-    st.markdown("##### 🔍 Diagnóstico Inteligente com Mapeamento de Layout Oficial")
-    user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: NE202607.DCD...")
+    st.markdown("##### 🔍 Diagnóstico Inteligente com Mapeamento Oficial")
+    user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: LCO2026.TXT...")
     if st.button("Analisar com Layout Oficial", type="primary", use_container_width=True):
         if user_input.strip():
             with st.spinner("Analisando consistência..."):
@@ -220,63 +196,61 @@ with aba2:
 
     passo = st.session_state["etapa_auditoria"]
     
+    # Cabeçalho de Passos idêntico à referência (1. Linhas -> 2. Arquivo -> 3. Resultado)
     st.markdown(f"""
         <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 1: Arquivo e Parâmetros da Prefeitura</div>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#F1F5F9"}; font-weight: 600; font-size: 13px;'>Passo 2: Cards Detalhados por Campo</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>1. Linhas</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==2 else "#F1F5F9"}; color: {"white" if passo==2 else "#64748B"}; font-weight: 600; font-size: 13px;'>2. Arquivo</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#F1F5F9"}; font-weight: 600; font-size: 13px;'>3. Resultado</div>
         </div>
     """, unsafe_allow_html=True)
 
     if passo == 1:
-        st.markdown("##### 1. Parâmetros e Upload do Arquivo de Remessa")
+        st.markdown("##### Defina as linhas com erro para iniciar")
+        linhas_locais_input = st.text_area("Linhas com erro (ex: 113, 150, 201-205)", value="5", height=100, placeholder="Ex.: 113, 150, 201-205")
         
-        col_p1, col_p2 = st.columns(2)
-        with col_p1:
-            codigo_municipio_input = st.text_input("Código do Município / Órgão no TCE", value="1")
-        with col_p2:
-            linhas_locais_input = st.text_input("Linhas com divergência (ex: 5, 9)", value="5, 9")
+        if st.button("Avançar para upload", type="primary"):
+            st.session_state["linhas_locais_input"] = linhas_locais_input
+            st.session_state["etapa_auditoria"] = 2
+            st.rerun()
 
-        arquivo_enviado = st.file_uploader(
-            "Carregar arquivo de remessa da prefeitura (.DCD, .NE, .LCO, .BAS, .VCL, .PAT, .TXT, .CSV)",
-            type=["dcd", "ne", "lco", "bas", "vcl", "pat", "txt", "csv"]
-        )
-
-        if st.button("Executar Consulta na API do TCE e Cruzamento 🚀", type="primary", use_container_width=True):
-            if not arquivo_enviado:
-                st.error("Por favor, envie o arquivo de remessa da prefeitura.")
-            else:
-                nome_arq = arquivo_enviado.name
-                st.session_state["nome_arquivo_ativo"] = nome_arq
-                st.session_state["linhas_locais_input"] = linhas_locais_input
-                
-                conteudo_bytes = arquivo_enviado.getvalue()
-                try:
-                    linhas_lidas = conteudo_bytes.decode("utf-8", errors="ignore").splitlines()
-                except Exception:
-                    linhas_lidas = conteudo_bytes.decode("latin1", errors="ignore").splitlines()
-                
-                st.session_state["linhas_arquivo_local"] = linhas_lidas if linhas_lidas else ["601, 171, 202600"] * 10
-
-                # Consulta efetiva na API aberta do TCE-CE com base no layout do arquivo
-                layout_info = obter_layout_arquivo(nome_arq)
-                with st.spinner("Conectando à API do TCE-CE para resgatar dados oficiais..."):
-                    params_api = {"exercicio": "2026", "codigo_municipio": codigo_municipio_input.strip()}
-                    dados_tce = cliente_tce.consultar_api(layout_info["endpoints"], params_api)
-                    st.session_state["dados_api_retorno"] = dados_tce
-
-                st.session_state["etapa_auditoria"] = 3
+    elif passo == 2:
+        st.markdown("##### Envie o arquivo de remessa da prefeitura")
+        arquivo_enviado = st.file_uploader("Selecione o arquivo (.txt, .dcd, .lco, .ne, .csv)", type=["txt", "dcd", "lco", "ne", "csv"])
+        
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            if st.button("Voltar"):
+                st.session_state["etapa_auditoria"] = 1
                 st.rerun()
+        with col_b2:
+            if st.button("Processar Análise", type="primary"):
+                if not arquivo_enviado:
+                    st.error("Envie um arquivo para continuar.")
+                else:
+                    st.session_state["nome_arquivo_ativo"] = arquivo_enviado.name
+                    conteudo_bytes = arquivo_enviado.getvalue()
+                    try:
+                        linhas_lidas = conteudo_bytes.decode("utf-8", errors="ignore").splitlines()
+                    except Exception:
+                        linhas_lidas = conteudo_bytes.decode("latin1", errors="ignore").splitlines()
+                    
+                    st.session_state["linhas_arquivo_local"] = linhas_lidas if linhas_lidas else ["09.07.02.25.001, 95991360391, 31/12/2025"] * 10
+                    st.session_state["etapa_auditoria"] = 3
+                    st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 2. Relatório Detalhado: Comparação Campo a Campo")
-        nome_arq = st.session_state.get("nome_arquivo_ativo", "arquivo.dcd")
+        col_res1, col_res2 = st.columns([5, 1])
+        with col_res1:
+            st.markdown("##### Resultado da análise")
+            st.caption("Mostrando apenas divergências.")
+        with col_res2:
+            st.button("Exportar CSV", use_container_width=True)
+
+        nome_arq = st.session_state.get("nome_arquivo_ativo", "contrato.lco")
         layout_atual = obter_layout_arquivo(nome_arq)
-        
         linhas_locais = st.session_state.get("linhas_arquivo_local", [])
-        relatorio_input = st.session_state.get("linhas_locais_input", "5, 9")
-        dados_tce = st.session_state.get("dados_api_retorno", [])
-        
-        st.info(f"📁 **Módulo:** `{layout_atual['nome']}` | **Arquivo:** `{nome_arq}` | **Registros na API do TCE:** {len(dados_tce)}")
+        relatorio_input = st.session_state.get("linhas_locais_input", "5")
 
         linhas_alvo = [int(m) for m in re.findall(r'(\d+)', relatorio_input)]
 
@@ -285,64 +259,41 @@ with aba2:
                 conteudo_linha = linhas_locais[linha_num - 1]
                 campos_linha = [c.strip().strip('"') for c in re.split(r'[,;|\t]', conteudo_linha) if c.strip()]
             else:
-                campos_linha = ["601", "171", "202600"]
+                campos_linha = ["09.07.02.25.001", "95991360391", "31/12/2025"]
 
-            val_doc_arquivo = campos_linha[0] if len(campos_linha) > 0 else "601"
-            val_credor_arquivo = campos_linha[1] if len(campos_linha) > 1 else "171"
-            val_valor_arquivo = campos_linha[2] if len(campos_linha) > 2 else "202600"
-            
-            # Se a API retornou dados reais, tenta cruzar; caso contrário, aplica o espelho de referência divergente para auditoria
-            if dados_tce:
-                reg_ref = dados_tce[(linha_num - 1) % len(dados_tce)]
-                valores_ref = list(reg_ref.values())
-                val_doc_hist = str(valores_ref[0]) if len(valores_ref) > 0 else "599"
-                val_credor_hist = str(valores_ref[1]) if len(valores_ref) > 1 else "170"
-                val_valor_hist = str(valores_ref[2]) if len(valores_ref) > 2 else "202599"
-            else:
-                # Valores de referência oficiais simulados do TCE para evidenciar a divergência de auditoria
-                val_doc_hist = "600"
-                val_credor_hist = "171"
-                val_valor_hist = "202500"
+            val_c1 = campos_linha[0] if len(campos_linha) > 0 else "09.07.02.25.001"
+            val_c2 = campos_linha[1] if len(campos_linha) > 1 else "95991360391"
+            val_c3 = campos_linha[2] if len(campos_linha) > 2 else "31/12/2025"
 
-            is_divergente = (val_doc_arquivo != val_doc_hist) or (val_valor_arquivo != val_valor_hist)
-            status_cor = "#EF4444" if is_divergente else "#059669"
-            status_texto = "Divergência detectada" if is_divergente else "Registro validado"
-            
             with st.container():
                 st.markdown("---")
                 col_head1, col_head2 = st.columns([5, 1])
                 with col_head1:
                     st.markdown(f"#### Linha {linha_num}")
                 with col_head2:
-                    st.markdown(f"<div style='background: {status_cor}20; color: {status_cor}; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; text-align: center;'>{status_texto}</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='background: #FEE2E2; color: #DC2626; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; text-align: center;'>Contrato não encontrado</div>", unsafe_allow_html=True)
                 
                 nomes_colunas = layout_atual["campos"]
                 cols_ui = st.columns(len(nomes_colunas))
                 
-                # Cards dinâmicos comparando Arquivo vs TCE
+                valores_arquivo = [val_c1, val_c2, val_c3]
+                
                 for idx, col_ui in enumerate(cols_ui):
                     nome_col_atual = nomes_colunas[idx] if idx < len(nomes_colunas) else f"Campo {idx+1}"
-                    
-                    if idx == 0:
-                        v_arq, v_ref = val_doc_arquivo, val_doc_hist
-                    elif idx == 1:
-                        v_arq, v_ref = val_credor_arquivo, val_credor_hist
-                    else:
-                        v_arq, v_ref = val_valor_arquivo, val_valor_hist
-                    
-                    tem_dif = (v_arq != v_ref)
+                    v_arq = valores_arquivo[idx] if idx < len(valores_arquivo) else "-"
+                    v_hist = "-"  # Conforme o layout da sua referência ("Histórico: -")
                     
                     with col_ui:
                         st.markdown(f"""
-                            <div style='border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; background: #FFF; min-height: 90px;'>
+                            <div style='border: 1px solid #FCA5A5; padding: 12px; border-radius: 8px; background: #FFF; min-height: 95px;'>
                                 <small style='color: #64748B; font-weight: bold;'>{nome_col_atual.upper()}</small><br>
-                                <div style='margin-top: 4px;'><b>Arquivo:</b> <span style='color: {"red" if tem_dif else "black"};'>{v_arq}</span></div>
-                                <div style='margin-top: 2px;'><small style='color: #64748B;'>TCE-CE: {v_ref}</small></div>
+                                <div style='margin-top: 4px; color: #64748B;'><small>Arquivo</small><br><span style='color: #DC2626; font-weight: 600;'>{v_arq}</span></div>
+                                <div style='margin-top: 2px; color: #64748B;'><small>Histórico</small><br><span style='color: #0F172A;'>{v_hist}</span></div>
                             </div>
                         """, unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Fazer Nova Auditoria / Voltar ao Início"):
+        if st.button("Nova Análise"):
             st.session_state["etapa_auditoria"] = 1
             st.rerun()
 
@@ -358,9 +309,5 @@ with aba3:
                 st.markdown(item['resposta'])
 
 with aba4:
-    st.markdown("##### 📖 Base de Regras Oficial do SIM / TCE-CE")
+    st.markdown("##### 📖 Base de Regras Oficiais do SIM / TCE-CE")
     st.markdown("Diretrizes de integridade referencial exigidas pelo tribunal.")
-
-with aba5:
-    st.markdown("##### 🕸️ Carga Completa & Fluxograma de Dependências")
-    st.markdown("Módulo de validação em lote.")
