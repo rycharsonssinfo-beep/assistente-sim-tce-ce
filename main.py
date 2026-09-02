@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS para padronizar a fonte corporativa e ocultar textos residuais de ícones
+# Injeção CSS para padronizar a fonte corporativa e ocultar completamente textos residuais de ícones
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -40,9 +40,14 @@ st.markdown("""
         color: var(--text-main) !important;
     }
 
-    /* Oculta textos residuais de ícones do Material Design que falharam ao carregar */
-    button[kind="header"] span, [data-testid="collapsedControl"] span {
-        font-size: 0px !important;
+    /* Oculta de vez qualquer texto residual de ícone no cabeçalho ou botão de colapso */
+    [data-testid="stHeader"] *, [data-testid="collapsedControl"] * {
+        color: transparent !important;
+    }
+    
+    /* Mantém visível apenas o ícone SVG/interação se houver */
+    [data-testid="collapsedControl"] svg {
+        color: var(--text-muted) !important;
     }
 
     .block-container {
