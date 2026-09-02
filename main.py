@@ -6,7 +6,7 @@ import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA (DESIGN SYSTEM CORPORATIVO)
+# 1. CONFIGURAÇÃO DA PÁGINA (LIGHT MODE CORPORATIVO)
 # ==========================================
 st.set_page_config(
     page_title="Consulta TCE — Análise de Divergências",
@@ -15,20 +15,20 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção mínima e ultra-limpa focada exclusivamente em superfícies e tipografia global (Dark Mode Premium 2026)
+# Injeção CSS para o Light Mode Premium mantendo a mesma estrutura SaaS moderna
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
     :root {
-        --bg-app: #090D16;
-        --surface-sidebar: #0E1320;
-        --surface-card: #131B2E;
-        --surface-card-hover: #1A233A;
-        --border-subtle: rgba(255, 255, 255, 0.06);
-        --border-strong: rgba(255, 255, 255, 0.12);
-        --text-main: #F1F5F9;
-        --text-muted: #94A3B8;
+        --bg-app: #F8FAFC;
+        --surface-sidebar: #F1F5F9;
+        --surface-card: #FFFFFF;
+        --surface-card-hover: #F8FAFC;
+        --border-subtle: rgba(0, 0, 0, 0.06);
+        --border-strong: rgba(0, 0, 0, 0.12);
+        --text-main: #0F172A;
+        --text-muted: #475569;
         --text-dim: #64748B;
         --accent: #2563EB;
         --accent-hover: #1D4ED8;
@@ -56,7 +56,7 @@ st.markdown("""
         letter-spacing: -0.025em;
     }
 
-    /* Sidebar minimalista estilo SaaS moderno (Linear / Vercel style) */
+    /* Sidebar minimalista estilo SaaS moderno */
     section[data-testid="stSidebar"] {
         background-color: var(--surface-sidebar) !important;
         border-right: 1px solid var(--border-subtle);
@@ -68,9 +68,9 @@ st.markdown("""
         padding-right: 1.25rem;
     }
 
-    /* Campos de texto e Inputs refinados sem bordas agressivas */
+    /* Campos de texto e Inputs refinados */
     .stTextArea textarea, .stTextInput input {
-        background-color: #0B101D !important;
+        background-color: #FFFFFF !important;
         border: 1px solid var(--border-strong) !important;
         color: var(--text-main) !important;
         border-radius: 6px !important;
@@ -161,7 +161,6 @@ def exportar_base_json():
 if "historico_casos" not in st.session_state:
     st.session_state["historico_casos"] = carregar_historico_db()
 
-# Inicialização do controle de navegação via session_state (Substituindo st.tabs para arquitetura limpa)
 if "nav_atual" not in st.session_state:
     st.session_state["nav_atual"] = "Diagnóstico"
 
@@ -226,23 +225,22 @@ Ocorreu um limite temporário de requisições na API do Gemini (`429 Quota Exce
     return "Não foi possível gerar resposta.", "Média"
 
 # ==========================================
-# 5. SIDEBAR SAAS MODERNA (ESTILO LINEAR/VERCEL)
+# 5. SIDEBAR SAAS MODERNA (LIGHT MODE)
 # ==========================================
 with st.sidebar:
     st.markdown("""
         <div style='padding-bottom: 0.5rem;'>
-            <div style='font-size: 0.95rem; font-weight: 700; color: #F1F5F9; display: flex; align-items: center; gap: 8px;'>
+            <div style='font-size: 0.95rem; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px;'>
                 <span>🛡️</span> Consulta TCE
             </div>
-            <div style='font-size: 0.78rem; color: #94A3B8; margin-top: 2px;'>Plataforma de Auditoria Municipal</div>
+            <div style='font-size: 0.78rem; color: #475569; margin-top: 2px;'>Plataforma de Auditoria Municipal</div>
         </div>
     """, unsafe_allow_html=True)
     
-    st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
     
     st.markdown("<div style='font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;'>Workspace</div>", unsafe_allow_html=True)
     
-    # Navegação via botões na sidebar (Arquitetura SaaS profissional)
     nav_opcoes = {
         "Diagnóstico": "🔍 Diagnóstico de Ocorrências",
         "Divergências": "📊 Análise de Divergências",
@@ -257,14 +255,14 @@ with st.sidebar:
             st.session_state["nav_atual"] = chave
             st.rerun()
 
-    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
     st.markdown("<div style='font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;'>Gerenciamento</div>", unsafe_allow_html=True)
     
     total_casos = len(st.session_state['historico_casos'])
     st.markdown(f"""
-        <div style='background-color: #131B2E; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;'>
-            <span style='font-size: 0.8rem; color: #94A3B8;'>Casos Catalogados</span>
-            <span style='font-size: 0.85rem; font-weight: 600; color: #F1F5F9;'>{total_casos}</span>
+        <div style='background-color: #FFFFFF; border: 1px solid rgba(0,0,0,0.08); border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;'>
+            <span style='font-size: 0.8rem; color: #475569;'>Casos Catalogados</span>
+            <span style='font-size: 0.85rem; font-weight: 600; color: #0F172A;'>{total_casos}</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -276,7 +274,7 @@ with st.sidebar:
         use_container_width=True
     )
     
-    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
     
     st.markdown(
         "<div style='font-size: 0.75rem; color: #64748B; line-height: 1.4;'>"
@@ -294,7 +292,7 @@ st.markdown("""
     <div style='margin-bottom: 2rem;'>
         <div style='font-size: 0.75rem; font-weight: 600; color: #2563EB; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;'>Auditoria Municipal SIM</div>
         <h1 style='font-size: 1.75rem; font-weight: 700; margin-bottom: 0.2rem;'>Consulta TCE — Análise de Divergências</h1>
-        <p style='color: #94A3B8; font-size: 0.92rem; margin: 0;'>Ambiente corporativo para diagnóstico e rastreabilidade de inconsistências em arquivos de remessa.</p>
+        <p style='color: #475569; font-size: 0.92rem; margin: 0;'>Ambiente corporativo para diagnóstico e rastreabilidade de inconsistências em arquivos de remessa.</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -305,14 +303,13 @@ pagina_selecionada = st.session_state["nav_atual"]
 # ==========================================
 
 if pagina_selecionada == "Diagnóstico":
-    # Layout em grid profissional (Área principal + Painel lateral de contexto)
     col_main, col_side = st.columns([7, 3], gap="large")
     
     with col_main:
         st.markdown("""
             <div style='margin-bottom: 1.25rem;'>
                 <h3 style='font-size: 1.15rem; font-weight: 600; margin-bottom: 0.2rem;'>Diagnóstico Inteligente</h3>
-                <p style='color: #94A3B8; font-size: 0.88rem; margin: 0;'>Mapeamento oficial do SIM/TCE-CE para resolução rápida de inconsistências.</p>
+                <p style='color: #475569; font-size: 0.88rem; margin: 0;'>Mapeamento oficial do SIM/TCE-CE para resolução rápida de inconsistências.</p>
             </div>
         """, unsafe_allow_html=True)
         
@@ -330,7 +327,7 @@ if pagina_selecionada == "Diagnóstico":
                     sigla_arq, modulo_identificado = classificar_erro(user_input)
                     resposta_ia, conf = chamar_gemini_seguro(user_input)
                     
-                    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
                     st.markdown("""
                         <div style='font-size: 0.85rem; font-weight: 600; color: #2563EB; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem;'>Resultado da Análise</div>
                     """, unsafe_allow_html=True)
@@ -341,12 +338,12 @@ if pagina_selecionada == "Diagnóstico":
 
     with col_side:
         st.markdown("""
-            <div style='background-color: #131B2E; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 20px;'>
-                <div style='font-size: 0.85rem; font-weight: 600; color: #F1F5F9; margin-bottom: 10px;'>💡 Instruções de Uso</div>
-                <p style='font-size: 0.82rem; color: #94A3B8; line-height: 1.5; margin-bottom: 12px;'>
+            <div style='background-color: #FFFFFF; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);'>
+                <div style='font-size: 0.85rem; font-weight: 600; color: #0F172A; margin-bottom: 10px;'>💡 Instruções de Uso</div>
+                <p style='font-size: 0.82rem; color: #475569; line-height: 1.5; margin-bottom: 12px;'>
                     Cole o relatório completo gerado pelo validador do SIM para que a inteligência artificial identifique a causa raiz e a diretriz normativa correspondente.
                 </p>
-                <div style='border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;'>
+                <div style='border-top: 1px solid rgba(0,0,0,0.06); padding-top: 10px;'>
                     <span style='font-size: 0.78rem; color: #64748B;'>Módulos suportados: LCO, VCL, DCD, NE, BAS, PAT.</span>
                 </div>
             </div>
@@ -358,7 +355,6 @@ elif pagina_selecionada == "Divergências":
 
     passo = st.session_state["etapa_auditoria"]
     
-    # Workflow moderno de etapas
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown(f"{'🔵 **1. Definir linhas**' if passo == 1 else '✅ 1. Definir linhas'}")
@@ -367,7 +363,7 @@ elif pagina_selecionada == "Divergências":
     with c3:
         st.markdown(f"{'🔵 **3. Visualizar divergências**' if passo == 3 else '3. Visualizar divergências'}")
 
-    st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
 
     if passo == 1:
         st.subheader("Definição de Linhas Inconsistentes")
@@ -461,7 +457,7 @@ elif pagina_selecionada == "Divergências":
                     with col_ui:
                         st.metric(label=nome_col_atual, value=v_arq, delta="Divergente", delta_color="inverse")
 
-        st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
         if st.button("🔄 Realizar Nova Análise", type="primary"):
             st.session_state["etapa_auditoria"] = 1
             st.rerun()
