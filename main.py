@@ -441,7 +441,7 @@ elif pagina_selecionada == "Divergências":
                 linhas_alvo.append(int(parte))
 
         if not linhas_alvo:
-azinhas_alvo = [5]
+            linhas_alvo = [5]
 
         for linha_num in linhas_alvo:
             if 0 < linha_num <= len(linhas_locais):
