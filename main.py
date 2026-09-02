@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS para padronizar a fonte corporativa e ocultar completamente textos residuais de ícones
+# Injeção CSS para padronizar a fonte corporativa e ocultar o ícone corrompido do header
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -40,14 +40,9 @@ st.markdown("""
         color: var(--text-main) !important;
     }
 
-    /* Oculta de vez qualquer texto residual de ícone no cabeçalho ou botão de colapso */
-    [data-testid="stHeader"] *, [data-testid="collapsedControl"] * {
-        color: transparent !important;
-    }
-    
-    /* Mantém visível apenas o ícone SVG/interação se houver */
-    [data-testid="collapsedControl"] svg {
-        color: var(--text-muted) !important;
+    /* Oculta completamente o texto residual de ícone corrompido do botão de colapso */
+    [data-testid="collapsedControl"] {
+        display: none !important;
     }
 
     .block-container {
