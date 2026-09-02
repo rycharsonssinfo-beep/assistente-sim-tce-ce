@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS completa com correção definitiva para textos de ícones residuais
+# Injeção CSS completa com correção definitiva para ocultar textos residuais de ícones
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -43,19 +43,21 @@ st.markdown("""
     /* Oculta completamente textos residuais de ícones do cabeçalho e barra lateral */
     [data-testid="collapsedControl"] span, 
     [data-testid="stHeader"] span,
-    [data-testid="collapsedControl"] p {
+    [data-testid="collapsedControl"] p,
+    [data-testid="stHeader"] p {
         display: none !important;
     }
     
-    /* Remove o texto de ícone corrompido específico do Material Design */
+    /* Força o ocultamento de strings de ícones corrompidas no botão de colapso */
     [data-testid="collapsedControl"] {
-        font-size: 0px !important;
-        color: transparent !important;
+        text-indent: -9999px;
+        overflow: hidden;
     }
     
     [data-testid="collapsedControl"] svg {
         font-size: 1.2rem !important;
         color: var(--text-muted) !important;
+        text-indent: 0px !important;
     }
 
     .block-container {
