@@ -40,7 +40,6 @@ st.markdown("""
         color: var(--text-main) !important;
     }
 
-    /* Otimização da largura e espaçamento do workspace principal */
     .block-container {
         padding-top: 2.5rem;
         padding-bottom: 4rem;
@@ -49,7 +48,6 @@ st.markdown("""
         padding-right: 3rem;
     }
 
-    /* Tipografia de alta precisão corporativa */
     h1, h2, h3, h4, h5, h6, p, span, label, div {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     }
@@ -59,7 +57,6 @@ st.markdown("""
         letter-spacing: -0.025em;
     }
 
-    /* Sidebar minimalista estilo SaaS moderno */
     section[data-testid="stSidebar"] {
         background-color: var(--surface-sidebar) !important;
         border-right: 1px solid var(--border-subtle);
@@ -71,7 +68,6 @@ st.markdown("""
         padding-right: 1.25rem;
     }
 
-    /* Campos de texto e Inputs refinados */
     .stTextArea textarea, .stTextInput input {
         background-color: #FFFFFF !important;
         border: 1px solid var(--border-strong) !important;
@@ -85,7 +81,6 @@ st.markdown("""
         box-shadow: 0 0 0 1px var(--accent) !important;
     }
 
-    /* Ajuste elegante para botões primários */
     .stButton button[kind="primary"] {
         background-color: var(--accent) !important;
         border: none !important;
@@ -371,7 +366,6 @@ elif pagina_selecionada == "Divergências":
     if passo == 1:
         st.subheader("Definição de Linhas Inconsistentes")
         
-        # Correção solicitada: Campo limpo sem valores pré-preenchidos incorretos
         linhas_locais_input = st.text_area(
             "Linhas com erro (ex: 5, 9 ou 10-15)", 
             value="", 
@@ -437,7 +431,7 @@ elif pagina_selecionada == "Divergências":
         if not linhas_alvo:
             linhas_alvo = [5]
 
-        for linha_num in linhas_alvo:
+        for linha_num inlinhas_alvo:
             if 0 < linha_num <= len(linhas_locais):
                 conteudo_linha = linhas_locais[linha_num - 1]
                 campos_linha = [c.strip().strip('"') for c in re.split(r'[,;|\t]', conteudo_linha) if c.strip()]
@@ -480,7 +474,9 @@ elif pagina_selecionada == "Historico":
         st.info("Nenhum caso catalogado ainda.")
     else:
         for item in historico:
-            with st.expander(f"Caso #{item['id']} | Módulo: {item.get('modulo', 'Geral')}"):
+            # Correção do título do expander para evitar conflito com strings de ícones do Streamlit
+            titulo_caso = f"Caso #{item['id']} — Módulo: {item.get('modulo', 'Geral')}"
+            with st.expander(titulo_caso):
                 st.code(item['erro'], language="text")
                 st.markdown(item['resposta'])
 
