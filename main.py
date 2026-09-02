@@ -289,7 +289,6 @@ with aba2:
 
     passo = st.session_state["etapa_auditoria"]
     
-    # Navegação superior em passos idêntica ao design de referência
     st.markdown(f"""
         <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
             <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 1: Linhas e Arquivo Local</div>
@@ -304,17 +303,20 @@ with aba2:
         
         col_up1, col_up2 = st.columns(2)
         with col_up1:
-            arquivo_auditoria = st.file_uploader("Arquivo Principal (.VCL, .LCO, .BAS, .PAT, etc.)", type=["lco", "bas", "vcl", "pat", "txt", "csv"])
+            arquivo_auditoria = st.file_uploader("Arquivo Principal (.VCL, .LCO, .BAS, .PAT, .NE, .DCD, etc.)", type=["lco", "bas", "vcl", "pat", "ne", "dcd", "txt", "csv"])
         with col_up2:
-            arquivo_secundario = st.file_uploader("Arquivo Complementar opcional (.DCD, .NE)", type=["dcd", "ne", "txt", "csv"])
+            arquivo_secundario = st.file_uploader("Arquivo Complementar opcional (.DCD, .NE, etc.)", type=["dcd", "ne", "lco", "bas", "vcl", "pat", "txt", "csv"])
 
         if st.button("Avançar para Parâmetros da API →", type="primary"):
-            if not arquivo_auditoria:
-                st.error("Por favor, envie ao menos o arquivo principal local.")
+            # Aceita arquivo principal ou complementar caso o usuário envie em qualquer um deles
+            arquivo_escolhido = arquivo_auditoria if arquivo_auditoria else arquivo_secundario
+            
+            if not arquivo_escolhido:
+                st.error("Por favor, envie ao menos um arquivo local (principal ou complementar).")
             else:
-                st.session_state["arquivo_auditoria_obj"] = arquivo_auditoria
+                st.session_state["arquivo_auditoria_obj"] = arquivo_escolhido
                 st.session_state["linhas_locais_input"] = linhas_locais_input
-                st.session_state["linhas_arquivo_local"] = arquivo_auditoria.getvalue().decode("latin1", errors="ignore").splitlines()
+                st.session_state["linhas_arquivo_local"] = arquivo_escolhido.getvalue().decode("latin1", errors="ignore").splitlines()
                 st.session_state["etapa_auditoria"] = 2
                 st.rerun()
 
@@ -389,14 +391,12 @@ with aba2:
         
         st.info(f"📁 **Módulo Identificado:** `{layout_atual['nome']}` | **Arquivo:** `{nome_arq}` | **Registros na API:** {len(dados_api)}")
 
-        # Coleta valores gerais da API para checagem rápida
         valores_api_geral = set()
         for reg in dados_api:
             for v in reg.values():
                 if v is not None:
                     valores_api_geral.add(str(v).strip().lower())
 
-        # Extrai linhas alvo
         linhas_alvo = [int(m) for m in re.findall(r'(\d+)', relatorio_input)] if relatorio_input else list(range(1, min(len(linhas_locais) + 1, 11)))
 
         for linha_num in linhas_alvo:
@@ -406,7 +406,6 @@ with aba2:
             else:
                 campos_linha = ["valor_exemplo_1", "valor_exemplo_2", "valor_exemplo_3"]
 
-            # Verifica divergências
             campos_divergentes = 0
             for campo in campos_linha:
                 if campo.lower() and valores_api_geral and campo.lower() not in valores_api_geral:
@@ -424,7 +423,6 @@ with aba2:
                 with col_head2:
                     st.markdown(f"<div style='background: {status_cor}20; color: {status_cor}; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; text-align: center;'>{status_texto}</div>", unsafe_allow_html=True)
                 
-                # Cards dinâmicos lado a lado por coluna baseados no layout oficial
                 nomes_colunas = layout_atual["campos"]
                 cols_ui = st.columns(len(nomes_colunas))
                 
@@ -471,7 +469,7 @@ with aba5:
     st.markdown("##### 🕸️ Carga Completa & Fluxograma de Dependências")
     st.markdown("Envie múltiplos arquivos para validação em lote da estrutura relacional do SIM.")
     
-    arquivos_lote = st.file_uploader("Selecione múltiplos arquivos do SIM", type=["lco", "bas", "vcls", "vcl", "pat", "txt", "csv"], accept_multiple_files=True)
+    arquivos_lote = st.file_uploader("Selecione múltiplos arquivos do SIM", type=["lco", "bas", "vcls", "vcl", "pat", "ne", "dcd", "txt", "csv"], accept_multiple_files=True)
     if arquivos_lote:
         resumo_lote = []
         for arq in arquivos_lote:
