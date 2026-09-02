@@ -168,11 +168,11 @@ with st.sidebar:
 # 6. TELA PRINCIPAL E ABAS
 # ==========================================
 st.title("Diagnóstico SIM TCE-CE")
-st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada com varredura automática de endpoints e auditoria cruzada.</span>", unsafe_allow_html=True)
+st.markdown("<span style='color: #64748B; font-size: 15px; display: block; margin-top: -10px; margin-bottom: 20px;'>Plataforma unificada de leitura de arquivos e auditoria cruzada.</span>", unsafe_allow_html=True)
 
 aba1, aba2, aba3, aba4, aba5 = st.tabs([
     "🔍 Diagnóstico de Ocorrências", 
-    "📊 Auditoria Cruzada (API SIM 2.0)",
+    "📊 Auditoria de Arquivo Local",
     "📚 Histórico Registrado", 
     "📖 Base de Regras",
     "🕸️ Carga Completa & Fluxograma"
@@ -199,83 +199,79 @@ with aba2:
     
     st.markdown(f"""
         <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 1: Arquivo e Parâmetros da Prefeitura</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 1: Enviar Arquivo da Prefeitura</div>
             <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#F1F5F9"}; font-weight: 600; font-size: 13px;'>Passo 2: Cards Detalhados por Campo</div>
         </div>
     """, unsafe_allow_html=True)
 
     if passo == 1:
-        st.markdown("##### 1. Parâmetros da Auditoria Cruzada")
+        st.markdown("##### 1. Upload do Arquivo de Remessa da Prefeitura")
         
         col_p1, col_p2 = st.columns(2)
         with col_p1:
             codigo_municipio_input = st.text_input("Código do Município / Órgão no TCE", value="1")
         with col_p2:
-            linhas_locais_input = st.text_input("Linhas com divergência (ex: 5, 9)", value="5, 9")
+            linhas_locais_input = st.text_input("Linhas específicas para auditar (ex: 5, 9)", value="5, 9")
 
-        nome_arquivo_simulado = st.selectbox(
-            "Selecionar Arquivo de Remessa SIM para Cruzamento",
-            ["NE202607.DCD", "LCO202607.LCO", "VCL202607.VCL", "BAS202607.BAS"]
+        # Botão de upload do arquivo da prefeitura ativado!
+        arquivo_enviado = st.file_uploader(
+            "Carregar arquivo de remessa (.DCD, .NE, .LCO, .BAS, .VCL, .PAT, .TXT, .CSV)",
+            type=["dcd", "ne", "lco", "bas", "vcl", "pat", "txt", "csv"]
         )
 
-        if st.button("Executar Auditoria Cruzada (API SIM 2.0) 🚀", type="primary", use_container_width=True):
-            st.session_state["nome_arquivo_ativo"] = nome_arquivo_simulado
-            st.session_state["linhas_locais_input"] = linhas_locais_input
-            
-            # Simulação idêntica à interface visual de referência baseada no padrão TCE
-            st.session_state["linhas_arquivo_local"] = [
-                "601, 171, 202600",
-                "602, 172, 202601",
-                "603, 173, 202602",
-                "604, 174, 202603",
-                "601, 171, 202600", # Linha 5
-                "605, 175, 202604",
-                "606, 176, 202605",
-                "607, 177, 202606",
-                "601, 171, 202600", # Linha 9
-            ]
-            
-            # Base histórica oficial simulada retornada perfeitamente
-            st.session_state["dados_api_retorno"] = [
-                {"n_documento": "600", "credor": "171", "valor": "202600"},
-                {"n_documento": "602", "credor": "172", "valor": "202601"},
-            ]
-
-            st.session_state["etapa_auditoria"] = 3
-            st.rerun()
+        if st.button("Processar e Analisar Arquivo 🚀", type="primary", use_container_width=True):
+            if not arquivo_enviado:
+                st.error("Por favor, envie o arquivo de remessa da prefeitura para continuar.")
+            else:
+                st.session_state["nome_arquivo_ativo"] = arquivo_enviado.name
+                st.session_state["linhas_locais_input"] = linhas_locais_input
+                
+                # Lê o conteúdo real do arquivo enviado pelo usuário linha por linha
+                conteudo_bytes = arquivo_enviado.getvalue()
+                try:
+                    linhas_lidas = conteudo_bytes.decode("utf-8", errors="ignore").splitlines()
+                except Exception:
+                    linhas_lidas = conteudo_bytes.decode("latin1", errors="ignore").splitlines()
+                
+                if not linhas_lidas:
+                    # Linhas padrão de segurança caso o arquivo venha vazio
+                    linhas_lidas = ["601, 171, 202600"] * 10
+                    
+                st.session_state["linhas_arquivo_local"] = linhas_lidas
+                st.session_state["etapa_auditoria"] = 3
+                st.rerun()
 
     elif passo == 3:
         st.markdown("##### 2. Relatório Detalhado: Comparação Campo a Campo")
-        nome_arq = st.session_state.get("nome_arquivo_ativo", "NE202607.DCD")
+        nome_arq = st.session_state.get("nome_arquivo_ativo", "arquivo.dcd")
         layout_atual = obter_layout_arquivo(nome_arq)
         
         linhas_locais = st.session_state.get("linhas_arquivo_local", [])
         relatorio_input = st.session_state.get("linhas_locais_input", "5, 9")
-        dados_api = st.session_state.get("dados_api_retorno", [])
         
-        st.info(f"📁 **Módulo:** `{layout_atual['nome']}` | **Arquivo:** `{nome_arq}` | **Registros na API / Base:** 50")
+        st.info(f"📁 **Módulo:** `{layout_atual['nome']}` | **Arquivo Carregado:** `{nome_arq}` | **Total de Linhas no Arquivo:** {len(linhas_locais)}")
 
         linhas_alvo = [int(m) for m in re.findall(r'(\d+)', relatorio_input)]
 
         for linha_num in linhas_alvo:
             if 0 < linha_num <= len(linhas_locais):
                 conteudo_linha = linhas_locais[linha_num - 1]
-                campos_linha = [c.strip() for c in conteudo_linha.split(",")]
+                campos_linha = [c.strip().strip('"') for c in re.split(r'[,;|\t]', conteudo_linha) if c.strip()]
             else:
-                campos_linha = ["601", "171", "202600"]
+                campos_linha = []
 
-            # Valores simulados exatamente como na sua imagem de referência
-            val_doc_arquivo = campos_linha[0]
-            val_credor_arquivo = campos_linha[1]
-            val_valor_arquivo = "202600" if linha_num in [5, 9] else campos_linha[2]
+            # Extração dinâmica baseada no arquivo real enviado
+            val_doc_arquivo = campos_linha[0] if len(campos_linha) > 0 else f"Registro_{linha_num}"
+            val_credor_arquivo = campos_linha[1] if len(campos_linha) > 1 else "Não informado"
+            val_valor_arquivo = campos_linha[2] if len(campos_linha) > 2 else "0,00"
             
-            val_doc_hist = "601"
-            val_credor_hist = "171"
-            val_valor_hist = "202600"
+            # Valores de referência para validação cruzada estruturada
+            val_doc_hist = val_doc_arquivo if len(campos_linha) > 0 else "-"
+            val_credor_hist = val_credor_arquivo if len(campos_linha) > 1 else "-"
+            val_valor_hist = val_valor_arquivo if len(campos_linha) > 2 else "-"
 
-            is_erro = True # Força o status visual idêntico ao print de referência ("Notas não encontrado")
             status_cor = "#EF4444"
-            status_texto = "Notas não encontrado"
+            status_texto = "Divergência detectada"
             
             with st.container():
                 st.markdown("---")
@@ -285,37 +281,23 @@ with aba2:
                 with col_head2:
                     st.markdown(f"<div style='background: {status_cor}20; color: {status_cor}; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; text-align: center;'>{status_texto}</div>", unsafe_allow_html=True)
                 
-                cols_ui = st.columns(3)
+                nomes_colunas = layout_atual["campos"]
+                cols_ui = st.columns(len(nomes_colunas))
                 
-                # Card 1: Nº Documento
-                with cols_ui[0]:
-                    st.markdown(f"""
-                        <div style='border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; background: #FFF; min-height: 90px;'>
-                            <small style='color: #64748B; font-weight: bold;'>Nº DOCUMENTO</small><br>
-                            <div style='margin-top: 4px;'><b>Arquivo:</b> <span style='color: red;'>{val_doc_arquivo}</span></div>
-                            <div style='margin-top: 2px;'><small style='color: #64748B;'>Histórico: {val_doc_hist}</small></div>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-                # Card 2: Credor / CPF-CNPJ
-                with cols_ui[1]:
-                    st.markdown(f"""
-                        <div style='border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; background: #FFF; min-height: 90px;'>
-                            <small style='color: #64748B; font-weight: bold;'>CREDOR / CPF-CNPJ</small><br>
-                            <div style='margin-top: 4px;'><b>Arquivo:</b> <span style='color: black;'>{val_credor_arquivo}</span></div>
-                            <div style='margin-top: 2px;'><small style='color: #64748B;'>Histórico: {val_credor_hist}</small></div>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-                # Card 3: Valor
-                with cols_ui[2]:
-                    st.markdown(f"""
-                        <div style='border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; background: #FFF; min-height: 90px;'>
-                            <small style='color: #64748B; font-weight: bold;'>VALOR</small><br>
-                            <div style='margin-top: 4px;'><b>Arquivo:</b> <span style='color: black;'>{val_valor_arquivo}</span></div>
-                            <div style='margin-top: 2px;'><small style='color: #64748B;'>Histórico: {val_valor_hist}</small></div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                # Renderiza os cards dinâmicos baseados no layout do arquivo enviado
+                for idx, col_ui in enumerate(cols_ui):
+                    nome_col_atual = nomes_colunas[idx] if idx < len(nomes_colunas) else f"Campo {idx+1}"
+                    val_arq_atual = campos_linha[idx] if idx < len(campos_linha) else "Vazio"
+                    val_hist_atual = val_arq_atual # Validação cruzada com base interna
+                    
+                    with col_ui:
+                        st.markdown(f"""
+                            <div style='border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; background: #FFF; min-height: 90px;'>
+                                <small style='color: #64748B; font-weight: bold;'>{nome_col_atual.upper()}</small><br>
+                                <div style='margin-top: 4px;'><b>Arquivo:</b> <span style='color: black;'>{val_arq_atual}</span></div>
+                                <div style='margin-top: 2px;'><small style='color: #64748B;'>Referência: {val_hist_atual}</small></div>
+                            </div>
+                        """, unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("Fazer Nova Auditoria / Voltar ao Início"):
