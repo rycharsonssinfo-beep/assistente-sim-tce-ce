@@ -150,7 +150,6 @@ class AuditoriaTCEAPI:
                 response.raise_for_status()
                 dados = response.json()
                 
-                # Tratamento para diferentes estruturas de retorno da API (lista ou dicionário encapsulado)
                 if isinstance(dados, dict):
                     resultados = dados.get("elements", dados.get("resultado", dados.get("data", [])))
                 elif isinstance(dados, list):
@@ -294,15 +293,29 @@ with aba2:
         col_c1, col_c2 = st.columns(2)
         with col_c1:
             endpoint_metodo = st.selectbox(
-                "Recurso / Endpoint Oficial da API (Veículos/Frota)", 
+                "Recurso / Endpoint Oficial da API", 
                 [
+                    # Módulo: Veículos e Frota
                     "veiculos_municipais", 
                     "veiculos_locados", 
                     "veiculos_cedidos_terceiros", 
                     "destinacao_veiculos", 
                     "baixa_destinacao_veiculos", 
                     "controle_abastecimento_veiculos", 
-                    "controle_manutencao_veiculos"
+                    "controle_manutencao_veiculos",
+                    
+                    # Módulo: Contratos e Licitações
+                    "contratos",
+                    "licitacoes",
+                    "aditivos_contratos",
+                    
+                    # Módulo: Cadastros Básicos e Orçamento
+                    "unidades_orcamentarias",
+                    "orgaos",
+                    "fontes_recursos",
+                    
+                    # Módulo: Patrimônio e Bens
+                    "bens_patrimoniais"
                 ]
             )
         with col_c2:
