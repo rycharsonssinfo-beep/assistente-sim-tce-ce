@@ -216,13 +216,16 @@ def chamar_gemini_seguro(prompt_usuario):
     3. 🔍 **Validação Técnica / SQL sugerido**: Dica de campo ou consulta para rastrear o registro problemático na base local antes de retransmitir.
     """
     try:
-        # Atualizado para o modelo atual e estável da API
+        # Atualizado para utilizar o modelo estável e configurado com timeout de segurança
         model = genai.GenerativeModel("gemini-3.7-flash", system_instruction=prompt_sistema)
-        response = model.generate_content(prompt_usuario)
+        response = model.generate_content(
+            prompt_usuario,
+            request_options={"timeout": 15}
+        )
         if response and response.text:
             return response.text, "Alta"
     except Exception as e:
-        return f"### ⚠️ Erro ao comunicar com a API do Gemini:\n`{str(e)}`", "Baixa"
+        return f"### ⚠️ A API demorou a responder ou ocorreu um erro:\n`{str(e)}`\n\n*Dica: Tente clicar em 'Analisar' novamente.*", "Baixa"
     
     return "Não foi possível gerar uma resposta detalhada.", "Média"
 
