@@ -474,9 +474,9 @@ elif pagina_selecionada == "Historico":
         st.info("Nenhum caso catalogado ainda.")
     else:
         for item in historico:
-            # Substituído hífen/underline por hífen limpo sem conflito com ícones do Streamlit
-            titulo_caso = f"Caso ID {item['id']} - Modulo {item.get('modulo', 'Geral')}"
-            with st.expander(titulo_caso):
+            # Substituído st.expander por containers com borda para evitar qualquer conflito de ícones
+            with st.container(border=True):
+                st.markdown(f"**Caso ID {item['id']} | Módulo: {item.get('modulo', 'Geral')}**")
                 st.code(item['erro'], language="text")
                 st.markdown(item['resposta'])
 
