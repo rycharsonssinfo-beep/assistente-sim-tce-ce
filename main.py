@@ -431,7 +431,8 @@ elif pagina_selecionada == "Divergências":
         if not linhas_alvo:
             linhas_alvo = [5]
 
-        for linha_num inlinhas_alvo:
+        # Correção aplicada aqui (espaço inserido corretamente em 'in linhas_alvo')
+        for linha_num in linhas_alvo:
             if 0 < linha_num <= len(linhas_locais):
                 conteudo_linha = linhas_locais[linha_num - 1]
                 campos_linha = [c.strip().strip('"') for c in re.split(r'[,;|\t]', conteudo_linha) if c.strip()]
@@ -474,7 +475,6 @@ elif pagina_selecionada == "Historico":
         st.info("Nenhum caso catalogado ainda.")
     else:
         for item in historico:
-            # Correção do título do expander para evitar conflito com strings de ícones do Streamlit
             titulo_caso = f"Caso #{item['id']} — Módulo: {item.get('modulo', 'Geral')}"
             with st.expander(titulo_caso):
                 st.code(item['erro'], language="text")
