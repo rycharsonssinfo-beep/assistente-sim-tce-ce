@@ -365,7 +365,7 @@ with aba2:
                 st.rerun()
 
     elif passo == 3:
-        st.markdown("##### 3. Relatório de Divergências: Análise Estruturada por Chaves Oficiais")
+        st.markdown("##### 3. Relatório de Divergências: Validação Estrita de Integridade")
         arq_obj = st.session_state.get("arquivo_auditoria_obj")
         nome_arq = arq_obj.name if arq_obj else "Arquivo"
         linhas_locais = st.session_state.get("linhas_arquivo_local", [])
@@ -377,12 +377,10 @@ with aba2:
         linhas_para_exibir = [int(m) for m in re.findall(r'(\d+)', relatorio_input)] if relatorio_input else []
         alvos = linhas_para_exibir if linhas_para_exibir else list(range(1, min(len(linhas_locais) + 1, 51)))
 
-        # Coleta todos os valores presentes nos registros da API para validação cruzada
-        valores_api_geral = set()
+        registros_api_str = set()
         for reg in dados_api:
-            for v in reg.values():
-                if v is not None:
-                    valores_api_geral.add(str(v).strip().lower())
+            reg_texto = " ".join([str(v).strip().lower() for v in reg.values() if v is not None])
+            registros_api_str.add(reg_texto)
 
         dados_dinamicos = []
         for num_linha in alvos:
@@ -390,30 +388,23 @@ with aba2:
                 conteudo_linha = linhas_locais[num_linha - 1]
                 campos_linha = [c.strip('"').strip() for c in conteudo_linha.split(",")]
                 
-                campos_validos = [c for c in campos_linha if len(c.strip()) > 0]
+                elementos_chave = [c.lower() for c in campos_linha[2:] if len(c.strip()) > 1]
                 
-                coincidencias = 0
-                campos_nao_encontrados = []
-                
-                for idx, campo in enumerate(campos_validos):
-                    campo_limpo = campo.lower()
-                    # Ignora números puramente sequenciais muito curtos ou datas padrão genéricas de preenchimento trivial se necessário, 
-                    # mas testa o valor estritamente contra os dados da API
-                    if campo_limpo in valores_api_geral:
-                        coincidencias += 1
-                    else:
-                        if len(campo_limpo) > 1:
-                            campos_nao_encontrados.append(f"Posição {idx+1}: '{campo}'")
+                encontrou_correspondencia = False
+                if dados_api and elementos_chave:
+                    acertos = sum(1 for elem in elementos_chave if any(elem in reg for reg in registros_api_str))
+                    if acertos >= len(elementos_chave) * 0.7:
+                        encontrou_correspondencia = True
 
                 if not dados_api:
                     status_val = "⚠️ API Indisponível / Sem Retorno para Cruzamento"
                     acao_val = "Valide os parâmetros obrigatórios informados no Passo 1."
-                elif len(campos_nao_encontrados) > 1 and coincidencias == 0:
-                    status_val = "❌ Divergente / Não encontrado na API"
-                    acao_val = f"Itens não localizados na base oficial: {', '.join(campos_nao_encontrados[:3])}"
+                elif not encontrou_correspondencia:
+                    status_val = "❌ Divergente / Linha Alterada ou Inexistente"
+                    acao_val = "Os dados desta linha foram modificados e não correspondem aos registros oficiais da API."
                 else:
                     status_val = "✅ Compatível com os registros da API"
-                    acao_val = "Nenhuma divergência crítica encontrada."
+                    acao_val = "Nenhuma divergência encontrada."
 
                 dados_dinamicos.append({
                     "Linha": num_linha,
