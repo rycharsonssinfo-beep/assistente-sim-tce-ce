@@ -42,11 +42,11 @@ st.markdown("""
 
     /* Otimização da largura e espaçamento do workspace principal */
     .block-container {
-        padding-top: 2rem;
+        padding-top: 2.5rem;
         padding-bottom: 4rem;
         max-width: 1500px;
-        padding-left: 2.5rem;
-        padding-right: 2.5rem;
+        padding-left: 3rem;
+        padding-right: 3rem;
     }
 
     /* Tipografia de alta precisão corporativa */
@@ -161,6 +161,10 @@ def exportar_base_json():
 if "historico_casos" not in st.session_state:
     st.session_state["historico_casos"] = carregar_historico_db()
 
+# Inicialização do controle de navegação via session_state (Substituindo st.tabs para arquitetura limpa)
+if "nav_atual" not in st.session_state:
+    st.session_state["nav_atual"] = "Diagnóstico"
+
 # ==========================================
 # 3. MAPEAMENTO DE LAYOUTS SIM
 # ==========================================
@@ -238,17 +242,32 @@ with st.sidebar:
     
     st.markdown("<div style='font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;'>Workspace</div>", unsafe_allow_html=True)
     
-    # Indicador sutil de casos catalogados na sidebar (substituindo o card pesado)
+    # Navegação via botões na sidebar (Arquitetura SaaS profissional)
+    nav_opcoes = {
+        "Diagnóstico": "🔍 Diagnóstico de Ocorrências",
+        "Divergências": "📊 Análise de Divergências",
+        "Historico": "📚 Histórico Registrado",
+        "Regras": "📖 Base de Regras"
+    }
+    
+    for chave, rotulo in nav_opcoes.items():
+        ativo = st.session_state["nav_atual"] == chave
+        btn_type = "primary" if ativo else "secondary"
+        if st.button(rotulo, key=f"nav_{chave}", use_container_width=True, type=btn_type):
+            st.session_state["nav_atual"] = chave
+            st.rerun()
+
+    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;'>Gerenciamento</div>", unsafe_allow_html=True)
+    
     total_casos = len(st.session_state['historico_casos'])
     st.markdown(f"""
-        <div style='background-color: #131B2E; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;'>
+        <div style='background-color: #131B2E; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;'>
             <span style='font-size: 0.8rem; color: #94A3B8;'>Casos Catalogados</span>
             <span style='font-size: 0.85rem; font-weight: 600; color: #F1F5F9;'>{total_casos}</span>
         </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<div style='font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;'>Gerenciamento</div>", unsafe_allow_html=True)
-    
     st.download_button(
         "📥 Exportar Backup (.JSON)", 
         data=exportar_base_json(), 
@@ -272,66 +291,81 @@ with st.sidebar:
 # 6. HEADER PRINCIPAL / CONTEXTO DA APLICAÇÃO
 # ==========================================
 st.markdown("""
-    <div style='margin-bottom: 1.5rem;'>
+    <div style='margin-bottom: 2rem;'>
         <div style='font-size: 0.75rem; font-weight: 600; color: #2563EB; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;'>Auditoria Municipal SIM</div>
         <h1 style='font-size: 1.75rem; font-weight: 700; margin-bottom: 0.2rem;'>Consulta TCE — Análise de Divergências</h1>
         <p style='color: #94A3B8; font-size: 0.92rem; margin: 0;'>Ambiente corporativo para diagnóstico e rastreabilidade de inconsistências em arquivos de remessa.</p>
     </div>
 """, unsafe_allow_html=True)
 
+pagina_selecionada = st.session_state["nav_atual"]
+
 # ==========================================
-# 7. NAVEGAÇÃO ENTRE AS SEÇÕES (WORKFLOW REFINADO)
+# 7. RENDERIZAÇÃO DE CONTEÚDO BASEADA EM ESTADO (WORKSPACE)
 # ==========================================
-aba1, aba2, aba3, aba4 = st.tabs([
-    "🔍 Diagnóstico de Ocorrências", 
-    "📊 Análise de Divergências", 
-    "📚 Histórico Registrado", 
-    "📖 Base de Regras"
-])
 
-with aba1:
-    st.markdown("""
-        <div style='margin-bottom: 1rem;'>
-            <h3 style='font-size: 1.15rem; font-weight: 600; margin-bottom: 0.2rem;'>Diagnóstico Inteligente com Mapeamento Oficial</h3>
-            <p style='color: #94A3B8; font-size: 0.88rem; margin: 0;'>Cole o relatório de erro ou inconsistência do SIM para análise imediata da causa raiz estruturada.</p>
-        </div>
-    """, unsafe_allow_html=True)
+if pagina_selecionada == "Diagnóstico":
+    # Layout em grid profissional (Área principal + Painel lateral de contexto)
+    col_main, col_side = st.columns([7, 3], gap="large")
     
-    user_input = st.text_area(
-        "Relatório de ocorrência", 
-        height=130, 
-        placeholder="Cole aqui o relatório de erro do sistema SIM (Ex: LCO2026.TXT - Erro na linha 311)...",
-        label_visibility="collapsed"
-    )
-    
-    col_btn1, _ = st.columns([2, 5])
-    with col_btn1:
-        analisar_btn = st.button("Analisar com Layout Oficial", type="primary", use_container_width=True)
+    with col_main:
+        st.markdown("""
+            <div style='margin-bottom: 1.25rem;'>
+                <h3 style='font-size: 1.15rem; font-weight: 600; margin-bottom: 0.2rem;'>Diagnóstico Inteligente</h3>
+                <p style='color: #94A3B8; font-size: 0.88rem; margin: 0;'>Mapeamento oficial do SIM/TCE-CE para resolução rápida de inconsistências.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        user_input = st.text_area(
+            "Relatório de ocorrência", 
+            height=160, 
+            placeholder="Cole aqui o relatório de erro do sistema SIM (Ex: LCO2026.TXT - Erro na linha 311)..."
+        )
+        
+        analisar_btn = st.button("Analisar ocorrência", type="primary")
 
-    if analisar_btn:
-        if user_input.strip():
-            with st.spinner("Processando auditoria inteligente..."):
-                sigla_arq, modulo_identificado = classificar_erro(user_input)
-                resposta_ia, conf = chamar_gemini_seguro(user_input)
-                st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
-                st.markdown(resposta_ia)
-                salvar_caso_db(user_input, resposta_ia, confianca=conf, modulo=modulo_identificado, arquivo=f".{sigla_arq}")
-                st.session_state["historico_casos"] = carregar_historico_db()
+        if analisar_btn:
+            if user_input.strip():
+                with st.spinner("Processando auditoria inteligente..."):
+                    sigla_arq, modulo_identificado = classificar_erro(user_input)
+                    resposta_ia, conf = chamar_gemini_seguro(user_input)
+                    
+                    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
+                    st.markdown("""
+                        <div style='font-size: 0.85rem; font-weight: 600; color: #2563EB; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem;'>Resultado da Análise</div>
+                    """, unsafe_allow_html=True)
+                    st.markdown(resposta_ia)
+                    
+                    salvar_caso_db(user_input, resposta_ia, confianca=conf, modulo=modulo_identificado, arquivo=f".{sigla_arq}")
+                    st.session_state["historico_casos"] = carregar_historico_db()
 
-with aba2:
+    with col_side:
+        st.markdown("""
+            <div style='background-color: #131B2E; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 20px;'>
+                <div style='font-size: 0.85rem; font-weight: 600; color: #F1F5F9; margin-bottom: 10px;'>💡 Instruções de Uso</div>
+                <p style='font-size: 0.82rem; color: #94A3B8; line-height: 1.5; margin-bottom: 12px;'>
+                    Cole o relatório completo gerado pelo validador do SIM para que a inteligência artificial identifique a causa raiz e a diretriz normativa correspondente.
+                </p>
+                <div style='border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;'>
+                    <span style='font-size: 0.78rem; color: #64748B;'>Módulos suportados: LCO, VCL, DCD, NE, BAS, PAT.</span>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+elif pagina_selecionada == "Divergências":
     if "etapa_auditoria" not in st.session_state:
         st.session_state["etapa_auditoria"] = 1
 
     passo = st.session_state["etapa_auditoria"]
     
-    # Barra de progresso nativa clara e limpa
+    # Workflow moderno de etapas
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown(f"{'🔵 **1. Seleção de Linhas**' if passo == 1 else '✅ 1. Seleção de Linhas'}")
+        st.markdown(f"{'🔵 **1. Definir linhas**' if passo == 1 else '✅ 1. Definir linhas'}")
     with c2:
-        st.markdown(f"{'🔵 **2. Upload do Arquivo**' if passo == 2 else ('✅ 2. Upload do Arquivo' if passo > 2 else '2. Upload do Arquivo')}")
+        st.markdown(f"{'🔵 **2. Enviar arquivo**' if passo == 2 else ('✅ 2. Enviar arquivo' if passo > 2 else '2. Enviar arquivo')}")
     with c3:
-        st.markdown(f"{'🔵 **3. Relatório de Divergências**' if passo == 3 else '3. Relatório de Divergências'}")
+        st.markdown(f"{'🔵 **3. Visualizar divergências**' if passo == 3 else '3. Visualizar divergências'}")
 
     st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
 
@@ -339,24 +373,22 @@ with aba2:
         st.subheader("Definição de Linhas Inconsistentes")
         linhas_locais_input = st.text_area("Linhas com erro (ex: 5, 9 ou 10-15)", value="311, 330", height=80)
         
-        col_avancar, _ = st.columns([2, 5])
-        with col_avancar:
-            if st.button("Avançar para upload", type="primary", use_container_width=True):
-                st.session_state["linhas_locais_input"] = linhas_locais_input
-                st.session_state["etapa_auditoria"] = 2
-                st.rerun()
+        if st.button("Avançar para upload", type="primary"):
+            st.session_state["linhas_locais_input"] = linhas_locais_input
+            st.session_state["etapa_auditoria"] = 2
+            st.rerun()
 
     elif passo == 2:
         st.subheader("Upload do Arquivo de Remessa")
         arquivo_enviado = st.file_uploader("Selecione o arquivo (.txt, .dcd, .lco, .ne, .csv)", type=["txt", "dcd", "lco", "ne", "csv"])
         
-        col_b1, col_b2, _ = st.columns([1, 1, 3])
+        col_b1, col_b2 = st.columns([1, 4])
         with col_b1:
-            if st.button("Voltar", use_container_width=True):
+            if st.button("Voltar"):
                 st.session_state["etapa_auditoria"] = 1
                 st.rerun()
         with col_b2:
-            if st.button("Processar Análise", type="primary", use_container_width=True):
+            if st.button("Processar Análise", type="primary"):
                 if not arquivo_enviado:
                     st.error("Envie um arquivo para continuar.")
                 else:
@@ -377,7 +409,7 @@ with aba2:
             st.subheader("Relatório de Divergências Encontradas")
             st.caption("Comparativo estruturado entre os registros do arquivo enviado e a base histórica.")
         with col_res2:
-            st.button("📥 Exportar CSV", use_container_width=True)
+            st.button("📥 Exportar CSV")
 
         nome_arq = st.session_state.get("nome_arquivo_ativo", "contrato.lco")
         layout_atual = obter_layout_arquivo(nome_arq)
@@ -430,13 +462,11 @@ with aba2:
                         st.metric(label=nome_col_atual, value=v_arq, delta="Divergente", delta_color="inverse")
 
         st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
-        col_nova_analise, _ = st.columns([2, 5])
-        with col_nova_analise:
-            if st.button("🔄 Realizar Nova Análise", type="primary", use_container_width=True):
-                st.session_state["etapa_auditoria"] = 1
-                st.rerun()
+        if st.button("🔄 Realizar Nova Análise", type="primary"):
+            st.session_state["etapa_auditoria"] = 1
+            st.rerun()
 
-with aba3:
+elif pagina_selecionada == "Historico":
     st.subheader("Histórico Registrado de Casos")
     st.caption("Consulta de ocorrências previamente diagnosticadas e armazenadas.")
     historico = st.session_state["historico_casos"]
@@ -448,6 +478,6 @@ with aba3:
                 st.code(item['erro'], language="text")
                 st.markdown(item['resposta'])
 
-with aba4:
+elif pagina_selecionada == "Regras":
     st.subheader("Base de Regras Oficiais do SIM / TCE-CE")
     st.markdown("Diretrizes de integridade referencial e validações normativas exigidas pelo tribunal.")
