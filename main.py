@@ -135,18 +135,14 @@ class AuditoriaTCEAPI:
         })
 
     def consultar_com_fallback(self, endpoints_possiveis: list, parametros: dict) -> pd.DataFrame:
-        """Tenta múltiplos endpoints e variações de parâmetros caso o primário retorne vazio"""
         for endpoint in endpoints_possiveis:
             url_endpoint = f"{self.base_url}/{endpoint}"
-            
-            # Tenta diferentes combinações de parâmetros comuns na API do TCE
             variacoes_params = [
                 parametros,
                 {"exercicio": parametros.get("exercicio"), "codigo_municipio": parametros.get("codigo_municipio")},
                 {"ano": parametros.get("exercicio")},
-                {} # Sem filtro restritivo para puxar a listagem geral do endpoint
+                {}
             ]
-            
             for params in variacoes_params:
                 try:
                     clean_params = {k: v for k, v in params.items() if v is not None}
@@ -159,12 +155,10 @@ class AuditoriaTCEAPI:
                             resultados = dados
                         else:
                             resultados = []
-                        
                         if resultados:
                             return pd.DataFrame(resultados)
                 except Exception:
                     continue
-                    
         return pd.DataFrame()
 
 cliente_api = AuditoriaTCEAPI()
@@ -182,7 +176,6 @@ def classificar_erro(texto):
         if f".{ext}" in t_lower or ext in t_lower:
             sigla_encontrada = ext.upper()
             break
-            
     modulo = "Não identificado"
     if "contrato" in t_lower or "lco" in t_lower:
         modulo = "Contratos e Aditivos"
@@ -203,7 +196,6 @@ if api_key:
 def chamar_gemini_seguro(prompt_usuario):
     if not api_key:
         return """### ⚠️ Erro de Configuração\nA chave da API Gemini não foi configurada.""", "Baixa"
-    
     prompt_sistema = "Você é um Auditor Especialista Sênior no sistema SIM do TCE-CE. Analise o erro e estruture em Causa Raiz, Como Corrigir e Validação Técnica."
     try:
         model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=prompt_sistema)
@@ -241,8 +233,7 @@ aba1, aba2, aba3, aba4, aba5 = st.tabs([
 
 with aba1:
     st.markdown("##### 🔍 Diagnóstico Inteligente com Mapeamento de Layout Oficial")
-    user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: NE202607.DCD - NOTAS DE EMPENHO...")
-    
+    user_input = st.text_area("Cole aqui o relatório de erro ou inconsistência do SIM:", height=140, placeholder="Ex: NE202607.DCD...")
     if st.button("Analisar com Layout Oficial", type="primary", use_container_width=True):
         if user_input.strip():
             with st.spinner("Analisando consistência..."):
@@ -261,22 +252,27 @@ with aba2:
     
     st.markdown(f"""
         <div style='display: flex; gap: 10px; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 12px; border-radius: 10px; margin-bottom: 20px;'>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 1: Arquivo e Leitura Automática</div>
-            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 2: Cards Detalhados por Campo</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==1 else "#F1F5F9"}; color: {"white" if passo==1 else "#64748B"}; font-weight: 600; font-size: 13px;'>Passo 1: Arquivo e Parâmetros da Prefeitura</div>
+            <div style='flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: {"#059669" if passo==3 else "#F1F5F9"}; color: {"white" if passo==3 else "#F1F5F9"}; font-weight: 600; font-size: 13px;'>Passo 2: Cards Detalhados por Campo</div>
         </div>
     """, unsafe_allow_html=True)
 
     if passo == 1:
-        st.markdown("##### 1. Envio de Arquivo SIM (Extração Automática de Parâmetros)")
-        linhas_locais_input = st.text_area("Linhas com erro (opcional, separadas por vírgula)", placeholder="Ex: 5, 9, 33...", height=80)
+        st.markdown("##### 1. Envio de Arquivo e Identificação do Município")
         
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            codigo_municipio_input = st.text_input("Código do Município / Órgão no TCE", value="1", help="Informe o código oficial do município ou unidade gestora cadastrado no TCE-CE.")
+        with col_p2:
+            linhas_locais_input = st.text_input("Linhas com erro (opcional, ex: 5, 9)", placeholder="Ex: 5, 9, 33...")
+
         col_up1, col_up2 = st.columns(2)
         with col_up1:
-            arquivo_auditoria = st.file_uploader("Arquivo Principal (.NE, .DCD, .VCL, .LCO, .BAS, .PAT)", type=["lco", "bas", "vcl", "pat", "ne", "dcd", "txt", "csv"])
+            arquivo_auditoria = st.file_uploader("Arquivo Principal (.NE, .DCD, .VCL, .LCO, etc.)", type=["lco", "bas", "vcl", "pat", "ne", "dcd", "txt", "csv"])
         with col_up2:
             arquivo_secundario = st.file_uploader("Arquivo Complementar opcional", type=["dcd", "ne", "lco", "bas", "vcl", "pat", "txt", "csv"])
 
-        if st.button("Executar Auditoria Cruzada Automática 🚀", type="primary", use_container_width=True):
+        if st.button("Executar Auditoria Cruzada com API 🚀", type="primary", use_container_width=True):
             arquivo_escolhido = arquivo_auditoria if arquivo_auditoria else arquivo_secundario
             if not arquivo_escolhido:
                 st.error("Envie ao menos um arquivo local.")
@@ -296,10 +292,10 @@ with aba2:
                 match_ref = re.search(r'(20\d{4})', nome_arq)
                 data_ref = match_ref.group(1) if match_ref else f"{exercicio}01"
 
-                with st.spinner(f"Varrendo API do TCE-CE para o arquivo '{nome_arq}'..."):
+                with st.spinner(f"Consultando API do TCE-CE para o município {codigo_municipio_input}..."):
                     params = {
                         "exercicio": exercicio,
-                        "codigo_municipio": "1",
+                        "codigo_municipio": codigo_municipio_input.strip(),
                         "data_referencia_doc": data_ref
                     }
                     df_api = cliente_api.consultar_com_fallback(endpoints_possiveis, params)
@@ -318,9 +314,8 @@ with aba2:
         relatorio_input = st.session_state.get("linhas_locais_input", "")
         dados_api = st.session_state.get("dados_api_retorno", [])
         
-        st.info(f"📁 **Módulo Identificado:** `{layout_atual['nome']}` | **Arquivo:** `{nome_arq}` | **Registros na API:** {len(dados_api)}")
+        st.info(f"📁 **Módulo:** `{layout_atual['nome']}` | **Arquivo:** `{nome_arq}` | **Registros na API:** {len(dados_api)}")
 
-        # Indexa todos os valores e chaves para cruzamento flexível
         valores_api_geral = set()
         for reg in dados_api:
             for v in reg.values():
@@ -403,7 +398,7 @@ with aba3:
 
 with aba4:
     st.markdown("##### 📖 Base de Regras Oficiais do SIM / TCE-CE")
-    st.markdown("Diretrizes de integridade referencial exigidas pelo tribunal para validação de remessas.")
+    st.markdown("Diretrizes de integridade referencial exigidas pelo tribunal.")
 
 with aba5:
     st.markdown("##### 🕸️ Carga Completa & Fluxograma de Dependências")
