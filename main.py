@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS completa
+# Injeção CSS completa com a remoção definitiva do tooltip "keyboard_double"
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -40,6 +40,7 @@ st.markdown("""
         color: var(--text-main) !important;
     }
 
+    /* Oculta completamente textos residuais de ícones do cabeçalho e barra lateral */
     [data-testid="collapsedControl"] span, 
     [data-testid="stHeader"] span,
     [data-testid="collapsedControl"] p,
@@ -47,6 +48,7 @@ st.markdown("""
         display: none !important;
     }
     
+    /* Remove strings de ícones corrompidas e desativa tooltips indesejados */
     [data-testid="collapsedControl"] {
         text-indent: -9999px;
         overflow: hidden;
@@ -111,6 +113,21 @@ st.markdown("""
         background-color: var(--accent-hover) !important;
     }
     </style>
+""", unsafe_allow_html=True)
+
+# Injeção de script via componente para zerar atributos de title (tooltip) do botão de colapso do Streamlit
+st.markdown("""
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const observer = new MutationObserver((mutations) => {
+            const toggleBtn = document.querySelector('[data-testid="collapsedControl"]');
+            if (toggleBtn) {
+                toggleBtn.removeAttribute('title');
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    });
+    </script>
 """, unsafe_allow_html=True)
 
 # ==========================================
@@ -239,7 +256,6 @@ with st.sidebar:
     
     st.markdown("<div style='font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;'>Workspace</div>", unsafe_allow_html=True)
     
-    # Navegação sem a aba de divergências
     nav_opcoes = {
         "Diagnóstico": "🔍 Diagnóstico de Ocorrências",
         "Historico": "📚 Histórico Registrado",
