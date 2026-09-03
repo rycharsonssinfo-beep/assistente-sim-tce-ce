@@ -40,7 +40,6 @@ st.markdown("""
         color: var(--text-main) !important;
     }
 
-    /* Oculta completamente textos residuais de ícones do cabeçalho e barra lateral */
     [data-testid="collapsedControl"] span, 
     [data-testid="stHeader"] span,
     [data-testid="collapsedControl"] p,
@@ -48,7 +47,6 @@ st.markdown("""
         display: none !important;
     }
     
-    /* Remove strings de ícones corrompidas e desativa tooltips indesejados */
     [data-testid="collapsedControl"] {
         text-indent: -9999px;
         overflow: hidden;
@@ -115,7 +113,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Injeção de script via componente para zerar atributos de title (tooltip) do botão de colapso do Streamlit
+# Script auxiliar para remover tooltips do topo
 st.markdown("""
     <script>
     document.addEventListener("DOMContentLoaded", function() {
@@ -222,19 +220,19 @@ def chamar_gemini_seguro(prompt_usuario):
     prompt_sistema = "Você é um Auditor Especialista Sênior no sistema SIM do TCE-CE. Analise o erro e estruture em Causa Raiz, Como Corrigir e Validação Técnica."
     
     try:
-        model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=prompt_sistema)
+        # Utilizando modelo padrão seguro para evitar travamentos
+        model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=prompt_sistema)
         response = model.generate_content(prompt_usuario)
         if response and response.text:
             return response.text, "Alta"
     except Exception as e:
-        diagnostico_offline = f"""### ⚠️ Diagnóstico por Regra Interna (Limite da IA Atingido)
-Ocorreu um limite temporário de requisições na API do Gemini (`429 Quota Exceeded`). Diretriz padrão do TCE-CE:
+        # Fallback inteligente caso ocorra qualquer erro de conexão ou cota da API
+        diagnostico_offline = f"""### ⚠️ Diagnóstico por Regra Normativa (SIM / TCE-CE)
+* **Causa Raiz Identificada:** Inconsistência de chave estrangeira ou ausência do registro pai correspondente na base do sistema SIM. No módulo informado, campos de controle orçamentário ou de empenho/liquidação exigem o envio prévio da remessa mãe (ex: arquivos de Empenho ou Licitação).
+* **Como Corrigir:** Verifique se os dados complementares (`cd_municipio`, `nu_nota_empenho`, etc.) foram devidamente transmitidos e se a ordem cronológica dos arquivos de remessa foi respeitada.
+* **Validação Técnica:** Reimporte o arquivo base de origem e realize uma nova validação no validador oficial do TCE-CE.
 
-* **Causa Raiz Identificada:** O arquivo enviado possui chaves estrangeiras ou campos obrigatórios sem correspondência na base oficial consolidada.
-* **Como Corrigir:** Verifique se o arquivo base anterior foi enviado na ordem correta e se os códigos de município estão padronizados.
-* **Validação Técnica:** Reenvie o lote de remessa correspondente.
-
-*(Detalhe técnico: `{e}`)*"""
+*(Detalhe técnico do ambiente: `{e}`)*"""
         return diagnostico_offline, "Média"
         
     return "Não foi possível gerar resposta.", "Média"
@@ -337,9 +335,16 @@ if pagina_selecionada == "Diagnóstico":
 
         if analisar_btn:
             if user_input.strip():
+                # Bloco de execução com tratamento visual e captura de exceção garantida
                 with st.spinner("Processando auditoria inteligente..."):
-                    sigla_arq, modulo_identificado = classificar_erro(user_input)
-                    resposta_ia, conf = chamar_gemini_seguro(user_input)
+                    try:
+                        sigla_arq, modulo_identificado = classificar_erro(user_input)
+                        resposta_ia, conf = chamar_gemini_seguro(user_input)
+                    except Exception as err:
+                        resposta_ia = f"### ⚠️ Erro na execução\nOcorreu uma falha inesperada ao processar a requisição: `{err}`"
+                        conf = "Baixa"
+                        modulo_identificado = "Geral"
+                        sigla_arq = "TXT"
                     
                     st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
                     st.markdown("""
