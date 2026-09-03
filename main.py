@@ -9,13 +9,13 @@ import google.generativeai as genai
 # 1. CONFIGURAÇÃO DA PÁGINA (LIGHT MODE CORPORATIVO)
 # ==========================================
 st.set_page_config(
-    page_title="Análise TCE — Análise de Divergências",
+    page_title="Análise TCE — Diagnóstico SIM",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS completa com correção definitiva para ocultar textos residuais de ícones
+# Injeção CSS completa
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -40,7 +40,6 @@ st.markdown("""
         color: var(--text-main) !important;
     }
 
-    /* Oculta completamente textos residuais de ícones do cabeçalho e barra lateral */
     [data-testid="collapsedControl"] span, 
     [data-testid="stHeader"] span,
     [data-testid="collapsedControl"] p,
@@ -48,7 +47,6 @@ st.markdown("""
         display: none !important;
     }
     
-    /* Força o ocultamento de strings de ícones corrompidas no botão de colapso */
     [data-testid="collapsedControl"] {
         text-indent: -9999px;
         overflow: hidden;
@@ -183,25 +181,7 @@ if "nav_atual" not in st.session_state:
     st.session_state["nav_atual"] = "Diagnóstico"
 
 # ==========================================
-# 3. MAPEAMENTO DE LAYOUTS SIM
-# ==========================================
-LAYOUTS_SIM = {
-    "LCO": {"nome": "Contratos e Aditivos (CO)", "campos": ["Nº Contrato", "CPF Gestor", "Data Assinatura"]},
-    "VCL": {"nome": "Veículos e Frotas", "campos": ["Placa / Código", "Unidade", "Tipo"]},
-    "DCD": {"nome": "Notas e Documentos (DCD)", "campos": ["Nº Documento", "Credor", "Valor"]},
-    "NE": {"nome": "Notas de Empenho", "campos": ["Nº Empenho", "Data", "Valor"]},
-    "BAS": {"nome": "Cadastros Básicos", "campos": ["Código Órgão", "Unidade", "Status"]},
-    "PAT": {"nome": "Patrimônio", "campos": ["Nº Tombo", "Descrição", "Valor"]}
-}
-
-def obter_layout_arquivo(nome_arquivo):
-    if not nome_arquivo:
-        return LAYOUTS_SIM["LCO"]
-    ext = nome_arquivo.split(".")[-1].upper()
-    return LAYOUTS_SIM.get(ext, LAYOUTS_SIM["LCO"])
-
-# ==========================================
-# 4. INTELIGÊNCIA ARTIFICIAL (GEMINI)
+# 3. INTELIGÊNCIA ARTIFICIAL (GEMINI)
 # ==========================================
 def classificar_erro(texto):
     if not texto:
@@ -243,7 +223,7 @@ Ocorreu um limite temporário de requisições na API do Gemini (`429 Quota Exce
     return "Não foi possível gerar resposta.", "Média"
 
 # ==========================================
-# 5. SIDEBAR SAAS MODERNA (LIGHT MODE)
+# 4. SIDEBAR SAAS MODERNA (LIGHT MODE)
 # ==========================================
 with st.sidebar:
     st.markdown("""
@@ -259,9 +239,9 @@ with st.sidebar:
     
     st.markdown("<div style='font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;'>Workspace</div>", unsafe_allow_html=True)
     
+    # Navegação sem a aba de divergências
     nav_opcoes = {
         "Diagnóstico": "🔍 Diagnóstico de Ocorrências",
-        "Divergências": "📊 Análise de Divergências",
         "Historico": "📚 Histórico Registrado",
         "Regras": "📖 Base de Regras"
     }
@@ -304,12 +284,12 @@ with st.sidebar:
     )
 
 # ==========================================
-# 6. HEADER PRINCIPAL / CONTEXTO DA APLICAÇÃO
+# 5. HEADER PRINCIPAL / CONTEXTO DA APLICAÇÃO
 # ==========================================
 st.markdown("""
     <div style='margin-bottom: 2rem;'>
         <div style='font-size: 0.75rem; font-weight: 600; color: #2563EB; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;'>Auditoria Municipal SIM</div>
-        <h1 style='font-size: 1.75rem; font-weight: 700; margin-bottom: 0.2rem;'>Análise TCE — Análise de Divergências</h1>
+        <h1 style='font-size: 1.75rem; font-weight: 700; margin-bottom: 0.2rem;'>Análise TCE — Diagnóstico de Ocorrências</h1>
         <p style='color: #475569; font-size: 0.92rem; margin: 0;'>Ambiente corporativo para diagnóstico e rastreabilidade de inconsistências em arquivos de remessa.</p>
     </div>
 """, unsafe_allow_html=True)
@@ -317,7 +297,7 @@ st.markdown("""
 pagina_selecionada = st.session_state["nav_atual"]
 
 # ==========================================
-# 7. RENDERIZAÇÃO DE CONTEÚDO BASEADA EM ESTADO (WORKSPACE)
+# 6. RENDERIZAÇÃO DE CONTEÚDO (WORKSPACE)
 # ==========================================
 
 if pagina_selecionada == "Diagnóstico":
@@ -366,125 +346,6 @@ if pagina_selecionada == "Diagnóstico":
                 </div>
             </div>
         """, unsafe_allow_html=True)
-
-elif pagina_selecionada == "Divergências":
-    if "etapa_auditoria" not in st.session_state:
-        st.session_state["etapa_auditoria"] = 1
-
-    passo = st.session_state["etapa_auditoria"]
-    
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(f"{'🔵 **1. Definir linhas**' if passo == 1 else '✅ 1. Definir linhas'}")
-    with c2:
-        st.markdown(f"{'🔵 **2. Enviar arquivo**' if passo == 2 else ('✅ 2. Enviar arquivo' if passo > 2 else '2. Enviar arquivo')}")
-    with c3:
-        st.markdown(f"{'🔵 **3. Visualizar divergências**' if passo == 3 else '3. Visualizar divergências'}")
-
-    st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
-
-    if passo == 1:
-        st.subheader("Definição de Linhas Inconsistentes")
-        
-        linhas_locais_input = st.text_area(
-            "Linhas com erro (ex: 5, 9 ou 10-15)", 
-            value="", 
-            placeholder="Digite os números ou intervalos das linhas problemáticas...",
-            height=80
-        )
-        
-        if st.button("Avançar para upload", type="primary"):
-            st.session_state["linhas_locais_input"] = linhas_locais_input
-            st.session_state["etapa_auditoria"] = 2
-            st.rerun()
-
-    elif passo == 2:
-        st.subheader("Upload do Arquivo de Remessa")
-        arquivo_enviado = st.file_uploader("Selecione o arquivo (.txt, .dcd, .lco, .ne, .csv)", type=["txt", "dcd", "lco", "ne", "csv"])
-        
-        col_b1, col_b2 = st.columns([1, 4])
-        with col_b1:
-            if st.button("Voltar"):
-                st.session_state["etapa_auditoria"] = 1
-                st.rerun()
-        with col_b2:
-            if st.button("Processar Análise", type="primary"):
-                if not arquivo_enviado:
-                    st.error("Envie um arquivo para continuar.")
-                else:
-                    st.session_state["nome_arquivo_ativo"] = arquivo_enviado.name
-                    conteudo_bytes = arquivo_enviado.getvalue()
-                    try:
-                        linhas_lidas = conteudo_bytes.decode("utf-8", errors="ignore").splitlines()
-                    except Exception:
-                        linhas_lidas = conteudo_bytes.decode("latin1", errors="ignore").splitlines()
-                    
-                    st.session_state["linhas_arquivo_local"] = linhas_lidas
-                    st.session_state["etapa_auditoria"] = 3
-                    st.rerun()
-
-    elif passo == 3:
-        col_res1, col_res2 = st.columns([5, 1])
-        with col_res1:
-            st.subheader("Relatório de Divergências Encontradas")
-            st.caption("Comparativo estruturado entre os registros do arquivo enviado e a base histórica.")
-        with col_res2:
-            st.button("📥 Exportar CSV")
-
-        nome_arq = st.session_state.get("nome_arquivo_ativo", "contrato.lco")
-        layout_atual = obter_layout_arquivo(nome_arq)
-        linhas_locais = st.session_state.get("linhas_arquivo_local", [])
-        relatorio_input = st.session_state.get("linhas_locais_input", "5")
-
-        linhas_alvo = []
-        for parte in relatorio_input.split(','):
-            parte = parte.strip()
-            if '-' in parte:
-                try:
-                    inicio, fim = map(int, parte.split('-'))
-                    linhas_alvo.extend(range(inicio, fim + 1))
-                except ValueError:
-                    pass
-            elif parte.isdigit():
-                linhas_alvo.append(int(parte))
-
-        if not linhas_alvo:
-            linhas_alvo = [5]
-
-        for linha_num in linhas_alvo:
-            if 0 < linha_num <= len(linhas_locais):
-                conteudo_linha = linhas_locais[linha_num - 1]
-                campos_linha = [c.strip().strip('"') for c in re.split(r'[,;|\t]', conteudo_linha) if c.strip()]
-            else:
-                campos_linha = ["601", "171", "202600"]
-
-            val_arq_c1 = campos_linha[0] if len(campos_linha) > 0 else "601"
-            val_arq_c2 = campos_linha[1] if len(campos_linha) > 1 else "171"
-            val_arq_c3 = campos_linha[2] if len(campos_linha) > 2 else "202600"
-
-            with st.container(border=True):
-                col_head1, col_head2 = st.columns([5, 1])
-                with col_head1:
-                    st.markdown(f"**Linha {linha_num}**")
-                with col_head2:
-                    st.error("Inexistente")
-                
-                nomes_colunas = layout_atual["campos"]
-                cols_ui = st.columns(len(nomes_colunas))
-                
-                valores_arquivo = [val_arq_c1, val_arq_c2, val_arq_c3]
-                
-                for idx, col_ui in enumerate(cols_ui):
-                    nome_col_atual = nomes_colunas[idx] if idx < len(nomes_colunas) else f"Campo {idx+1}"
-                    v_arq = valores_arquivo[idx] if idx < len(valores_arquivo) else "-"
-                    
-                    with col_ui:
-                        st.metric(label=nome_col_atual, value=v_arq, delta="Divergente", delta_color="inverse")
-
-        st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
-        if st.button("🔄 Realizar Nova Análise", type="primary"):
-            st.session_state["etapa_auditoria"] = 1
-            st.rerun()
 
 elif pagina_selecionada == "Historico":
     st.subheader("Histórico Registrado de Casos")
