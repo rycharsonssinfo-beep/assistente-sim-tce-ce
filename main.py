@@ -217,20 +217,27 @@ def chamar_gemini_seguro(prompt_usuario):
     if not api_key:
         return """### ⚠️ Erro de Configuração\nA chave da API Gemini não foi configurada nos segredos do Streamlit.""", "Baixa"
     
-    prompt_sistema = "Você é um Auditor Especialista Sênior no sistema SIM do TCE-CE. Analise o erro e estruture em Causa Raiz, Como Corrigir e Validação Técnica."
+    # Prompt avançado de Auditor Sênior para garantir respostas técnicas e ricas
+    prompt_sistema = """Você é um Auditor Especialista Sênior e Analista Técnico do Sistema Integrado Municipal (SIM) do Tribunal de Contas do Estado do Ceará (TCE-CE). 
+Sua tarefa é analisar rigorosamente o relatório de inconsistência ou erro de remessa enviado pelo usuário.
+
+Estruture sua resposta obrigatoriamente nos seguintes tópicos em Markdown bem formatado:
+1. **Contexto Normativo e Módulo Afetado:** Identifique claramente a finalidade do arquivo e o impacto da falha perante as normativas do TCE-CE.
+2. **Causa Raiz Detalhada:** Explique tecnicamente o motivo da rejeição (ex: chaves estrangeiras divergentes, ausência de vínculo com o registro pai, formatação de campos obrigatórios, etc.).
+3. **Plano de Correção Prático:** Forneça um passo a passo objetivo de como o operador deve ajustar os dados no sistema de origem ou no layout do arquivo texto.
+4. **Validação Técnica Recomendada:** Indique como conferir o resultado antes de submeter uma nova remessa ao validador oficial."""
     
     try:
-        # Utilizando modelo padrão seguro para evitar travamentos
-        model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=prompt_sistema)
+        # Restaurado o modelo correto gemini-3.6-flash
+        model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=prompt_sistema)
         response = model.generate_content(prompt_usuario)
         if response and response.text:
             return response.text, "Alta"
     except Exception as e:
-        # Fallback inteligente caso ocorra qualquer erro de conexão ou cota da API
         diagnostico_offline = f"""### ⚠️ Diagnóstico por Regra Normativa (SIM / TCE-CE)
-* **Causa Raiz Identificada:** Inconsistência de chave estrangeira ou ausência do registro pai correspondente na base do sistema SIM. No módulo informado, campos de controle orçamentário ou de empenho/liquidação exigem o envio prévio da remessa mãe (ex: arquivos de Empenho ou Licitação).
-* **Como Corrigir:** Verifique se os dados complementares (`cd_municipio`, `nu_nota_empenho`, etc.) foram devidamente transmitidos e se a ordem cronológica dos arquivos de remessa foi respeitada.
-* **Validação Técnica:** Reimporte o arquivo base de origem e realize uma nova validação no validador oficial do TCE-CE.
+* **Contexto e Causa Raiz:** O erro reportado indica uma quebra de integridade referencial ou divergência nas chaves compostas do módulo (como chaves de município, órgão, unidade, dotação ou notas de empenho/liquidação). O sistema SIM exige que os registros dependentes tenham correspondência exata na base consolidada anterior.
+* **Plano de Correção:** Verifique os campos apontados no relatório de erro do validador, assegurando que o arquivo pai correspondente foi enviado e processado com sucesso antes deste lote.
+* **Validação Técnica:** Ajuste o registro na origem e reexecute a validação do arquivo.
 
 *(Detalhe técnico do ambiente: `{e}`)*"""
         return diagnostico_offline, "Média"
@@ -335,7 +342,6 @@ if pagina_selecionada == "Diagnóstico":
 
         if analisar_btn:
             if user_input.strip():
-                # Bloco de execução com tratamento visual e captura de exceção garantida
                 with st.spinner("Processando auditoria inteligente..."):
                     try:
                         sigla_arq, modulo_identificado = classificar_erro(user_input)
