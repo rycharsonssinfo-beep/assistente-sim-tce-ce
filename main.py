@@ -5,43 +5,44 @@ import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA (DARK MODE PREMIUM / AI CHAT)
+# 1. CONFIGURAÇÃO DA PÁGINA (LIGHT MODE PREMIUM / AI CHAT)
 # ==========================================
 st.set_page_config(
     page_title="Assistente SIM — TCE-CE",
-    page_icon="🛡️",
+    page_icon="🛡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS avançada para transformar o Streamlit em um Chatbot Moderno de IA (Dark Mode)
+# Injeção CSS avançada para Light Mode moderno e limpo, eliminando qualquer vestígio de Material Icons textuais ou bugs de layout
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
     :root {
-        --bg-app: #0B0D10;
-        --sidebar-bg: #101318;
-        --surface-card: #151922;
-        --surface-hover: #1E2330;
-        --border-subtle: rgba(255, 255, 255, 0.08);
-        --border-strong: rgba(255, 255, 255, 0.15);
-        --text-main: #F5F7FA;
-        --text-muted: #9AA3B2;
-        --text-dim: #64748B;
-        --accent: #3B82F6;
-        --accent-hover: #2563EB;
-        --user-bubble: #1E293B;
-        --ai-bubble: #151922;
+        --bg-app: #F8FAFC;
+        --sidebar-bg: #FFFFFF;
+        --surface-card: #FFFFFF;
+        --surface-hover: #F1F5F9;
+        --border-subtle: #E2E8F0;
+        --border-strong: #CBD5E1;
+        --text-main: #0F172A;
+        --text-muted: #475569;
+        --text-dim: #94A3B8;
+        --accent: #2563EB;
+        --accent-hover: #1D4ED8;
+        --user-bubble: #EFF6FF;
+        --ai-bubble: #FFFFFF;
     }
 
-    /* Reset global e Tipografia */
+    /* Reset global e Tipografia Light Mode */
     .stApp, html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
         background-color: var(--bg-app) !important;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         color: var(--text-main) !important;
     }
 
+    /* Ocultar textos de colapso indesejados ou strings de Material Icons */
     [data-testid="collapsedControl"] span, 
     [data-testid="stHeader"] span,
     [data-testid="collapsedControl"] p,
@@ -60,15 +61,15 @@ st.markdown("""
         text-indent: 0px !important;
     }
 
-    /* Layout Principal centralizado com largura de leitura ideal */
+    /* Layout Principal centralizado com largura de leitura ideal (max 900px) */
     .block-container {
         padding-top: 2rem;
-        padding-bottom: 6rem;
-        max-width: 920px;
+        padding-bottom: 7rem;
+        max-width: 900px;
         margin: 0 auto;
     }
 
-    /* Sidebar minimalista e discreta */
+    /* Sidebar minimalista e elegante em Light Mode */
     section[data-testid="stSidebar"] {
         background-color: var(--sidebar-bg) !important;
         border-right: 1px solid var(--border-subtle);
@@ -81,7 +82,7 @@ st.markdown("""
         max-width: 100%;
     }
 
-    /* Estilização de Botões da Sidebar para parecerem itens de navegação modernos */
+    /* Estilização de Botões da Sidebar */
     section[data-testid="stSidebar"] .stButton button {
         background-color: transparent !important;
         border: 1px solid var(--border-subtle) !important;
@@ -101,19 +102,19 @@ st.markdown("""
         border-color: var(--border-strong) !important;
     }
 
-    /* Botão primário na sidebar (Nova Análise) com destaque sutil e elegante */
+    /* Botão primário na sidebar (+ Nova análise) */
     section[data-testid="stSidebar"] .stButton button[kind="primary"] {
-        background-color: rgba(59, 130, 246, 0.15) !important;
-        border: 1px solid rgba(59, 130, 246, 0.3) !important;
-        color: #60A5FA !important;
+        background-color: #EFF6FF !important;
+        border: 1px solid #BFDBFE !important;
+        color: var(--accent) !important;
         font-weight: 600 !important;
     }
     section[data-testid="stSidebar"] .stButton button[kind="primary"]:hover {
-        background-color: rgba(59, 130, 246, 0.25) !important;
-        color: #93C5FD !important;
+        background-color: #DBEAFE !important;
+        color: var(--accent-hover) !important;
     }
 
-    /* Estilização do Chat Input (Rodapé flutuante moderno) */
+    /* Estilização impecável do Chat Input fixo no rodapé */
     [data-testid="stChatInput"] {
         background-color: var(--bg-app) !important;
         border-top: 1px solid var(--border-subtle);
@@ -121,19 +122,19 @@ st.markdown("""
     }
 
     [data-testid="stChatInput"] textarea {
-        background-color: var(--surface-card) !important;
+        background-color: #FFFFFF !important;
         color: var(--text-main) !important;
         border: 1px solid var(--border-strong) !important;
         border-radius: 12px !important;
         font-size: 0.95rem !important;
         padding: 0.85rem 1rem !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
-        transition: border-color 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
     [data-testid="stChatInput"] textarea:focus {
         border-color: var(--accent) !important;
-        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
     }
 
     [data-testid="stChatInput"] button {
@@ -147,14 +148,14 @@ st.markdown("""
         background-color: var(--accent-hover) !important;
     }
 
-    /* Balões de mensagens nativos ajustados para o tema */
+    /* Balões de mensagens nativos ajustados para Light Mode */
     [data-testid="stChatMessage"] {
         background-color: transparent !important;
         padding: 1.25rem 0 !important;
         border-bottom: 1px solid var(--border-subtle);
     }
     
-    /* Fontes e Tipografia geral */
+    /* Tipografia geral */
     h1, h2, h3, h4, h5, h6, p, span, label, div {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         color: var(--text-main);
@@ -179,13 +180,13 @@ st.markdown("""
 
     .stTabs [aria-selected="true"] {
         background-color: var(--surface-hover) !important;
-        color: var(--text-main) !important;
+        color: var(--accent) !important;
         border-color: var(--border-strong) !important;
     }
 
     /* Inputs de pesquisa */
     input {
-        background-color: var(--surface-card) !important;
+        background-color: #FFFFFF !important;
         color: var(--text-main) !important;
         border: 1px solid var(--border-strong) !important;
         border-radius: 8px !important;
@@ -370,25 +371,22 @@ if "nav_atual" not in st.session_state:
 # 6. SIDEBAR MINIMALISTA E DISCRETA
 # ==========================================
 with st.sidebar:
-    # Identidade visual limpa no topo da sidebar
     st.markdown("""
-        <div style='padding-top: 0.5rem; padding-bottom: 1rem;'>
-            <div style='font-size: 0.95rem; font-weight: 700; color: #F5F7FA; display: flex; align-items: center; gap: 8px;'>
-                <span>🛡️</span> Assistente SIM
+        <div style='padding-top: 0.5rem; padding-bottom: 1.2rem;'>
+            <div style='font-size: 0.95rem; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px;'>
+                <span>🛡</span> Assistente SIM
             </div>
-            <div style='font-size: 0.75rem; color: #9AA3B2; margin-top: 2px;'>TCE-CE • Manual 2026</div>
+            <div style='font-size: 0.75rem; color: #64748B; margin-top: 2px;'>TCE-CE • Manual 2026</div>
         </div>
     """, unsafe_allow_html=True)
     
-    # Botão de Nova Análise com destaque elegante
     if st.button("＋ Nova análise", key="btn_nova_analise", use_container_width=True, type="primary"):
         st.session_state["mensagens"] = []
         st.session_state["nav_atual"] = "Assistente"
         st.rerun()
         
-    st.markdown("<div style='margin: 1.2rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin: 1.2rem 0; border-top: 1px solid #E2E8F0;'></div>", unsafe_allow_html=True)
     
-    # Navegação limpa
     nav_opcoes = {
         "Assistente": "💬 Assistente",
         "Regras": "📖 Base de Regras"
@@ -401,10 +399,10 @@ with st.sidebar:
             st.session_state["nav_atual"] = chave
             st.rerun()
 
-    st.markdown("<div style='margin: 2rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin: 2rem 0; border-top: 1px solid #E2E8F0;'></div>", unsafe_allow_html=True)
     
     st.markdown(
-        "<div style='font-size: 0.73rem; color: #64748B; line-height: 1.5;'>"
+        "<div style='font-size: 0.73rem; color: #94A3B8; line-height: 1.5;'>"
         "<strong>SIM • TCE-CE</strong><br>"
         "Manual do SIM 2026<br>"
         "Portaria nº 1227/2025"
@@ -418,47 +416,43 @@ with st.sidebar:
 pagina = st.session_state["nav_atual"]
 
 if pagina == "Assistente":
-    # Header minimalista da conversa
     st.markdown("""
-        <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 1rem;'>
+        <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid #E2E8F0; padding-bottom: 0.8rem;'>
             <div>
-                <div style='font-size: 1.1rem; font-weight: 600; color: #F5F7FA;'>Assistente SIM</div>
-                <div style='font-size: 0.78rem; color: #9AA3B2;'>Especialista em diagnóstico técnico do SIM • Manual 2026</div>
+                <div style='font-size: 1.05rem; font-weight: 600; color: #0F172A;'>Assistente SIM</div>
+                <div style='font-size: 0.78rem; color: #64748B;'>Diagnóstico técnico especializado do SIM • TCE-CE</div>
             </div>
-            <div style='display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #10B981;'>
+            <div style='display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #059669;'>
                 <span style='width: 7px; height: 7px; background-color: #10B981; border-radius: 50%; display: inline-block;'></span> Online
             </div>
         </div>
     """, unsafe_allow_html=True)
     
-    # Tela Inicial (Empty State moderna estilo Chatbot de IA)
     if not st.session_state["mensagens"]:
         st.markdown("""
-            <div style='text-align: center; margin-top: 6rem; margin-bottom: 4rem;'>
-                <div style='font-size: 2.5rem; margin-bottom: 1rem;'>🛡️</div>
-                <h1 style='font-size: 1.5rem; font-weight: 600; color: #F5F7FA; margin-bottom: 0.5rem;'>Assistente SIM</h1>
-                <p style='font-size: 0.95rem; color: #9AA3B2; max-width: 440px; margin: 0 auto 1.5rem auto; line-height: 1.5;'>
-                    Como posso ajudar com o SIM?<br>Descreva uma ocorrência, erro ou divergência para iniciar o diagnóstico.
+            <div style='text-align: center; margin-top: 5rem; margin-bottom: 3rem;'>
+                <div style='font-size: 2.2rem; margin-bottom: 0.8rem;'>🛡</div>
+                <h1 style='font-size: 1.4rem; font-weight: 600; color: #0F172A; margin-bottom: 0.4rem;'>Como posso ajudar?</h1>
+                <p style='font-size: 0.9rem; color: #64748B; max-width: 420px; margin: 0 auto; line-height: 1.5;'>
+                    Descreva uma ocorrência, erro ou divergência do SIM para iniciar o diagnóstico.
                 </p>
             </div>
         """, unsafe_allow_html=True)
         
-    # Exibe o histórico de mensagens da conversa atual no padrão de chat moderno
     for msg in st.session_state["mensagens"]:
         if msg["role"] == "user":
             with st.chat_message("user", avatar="👤"):
                 st.markdown(msg["content"])
         else:
-            with st.chat_message("assistant", avatar="🛡️"):
+            with st.chat_message("assistant", avatar="🛡"):
                 st.markdown(msg["content"])
                 
-    # Entrada do chat (Input nativo do Streamlit estilizado via CSS no rodapé)
     if prompt_usuario := st.chat_input("Digite uma dúvida ou cole a ocorrência do SIM..."):
         st.session_state["mensagens"].append({"role": "user", "content": prompt_usuario})
         with st.chat_message("user", avatar="👤"):
             st.markdown(prompt_usuario)
             
-        with st.chat_message("assistant", avatar="🛡️"):
+        with st.chat_message("assistant", avatar="🛡"):
             with st.spinner("Analisando ocorrência..."):
                 resposta_ia = consultar_assistente_gemini(st.session_state["mensagens"][:-1], prompt_usuario)
                 st.markdown(resposta_ia)
@@ -468,70 +462,69 @@ if pagina == "Assistente":
 elif pagina == "Regras":
     st.markdown("""
         <div style='margin-bottom: 2rem;'>
-            <h2 style='font-size: 1.4rem; font-weight: 600; margin-bottom: 0.3rem; color: #F5F7FA;'>Base de Regras SIM 2026</h2>
-            <p style='color: #9AA3B2; font-size: 0.88rem; margin: 0;'>Conhecimento técnico estruturado do Manual do SIM (Portaria nº 1227/2025 do TCE-CE).</p>
+            <h2 style='font-size: 1.35rem; font-weight: 600; margin-bottom: 0.3rem; color: #0F172A;'>Base de Regras</h2>
+            <p style='color: #64748B; font-size: 0.88rem; margin: 0;'>Conhecimento técnico utilizado pelo Assistente SIM (Manual do SIM 2026).</p>
         </div>
     """, unsafe_allow_html=True)
     
-    termo_busca = st.text_input("🔍 Pesquisar na base de conhecimento", placeholder="Digite um termo, número de tabela, módulo ou regra...")
+    termo_busca = st.text_input("🔍 Pesquisar regras, tabelas ou mensagens...", placeholder="Digite um termo ou número de tabela...")
     
-    st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin: 1.2rem 0;'></div>", unsafe_allow_html=True)
     
     tab_regras, tab_tabelas, tab_matematicas = st.tabs(["📌 Regras de Validação", "📊 Catálogo de Tabelas", "📐 Validações Matemáticas"])
     
     with tab_regras:
-        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height: 0.8rem;'></div>", unsafe_allow_html=True)
         filtro_modulo = st.selectbox("Filtrar por Módulo", ["Todos"] + list(set(r["modulo"] for r in BASE_CONHECIMENTO_SIM_2026["regras"])))
-        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height: 0.8rem;'></div>", unsafe_allow_html=True)
         
         for regra in BASE_CONHECIMENTO_SIM_2026["regras"]:
             texto_regra_completo = f"{regra['id_interno']} {regra['modulo']} {regra['tabela']} {regra['regra']} {regra['mensagem_original']} {regra['causa']} {regra['correcao']}".lower()
             if termo_busca.lower() in texto_regra_completo or not termo_busca:
                 if filtro_modulo == "Todos" or regra["modulo"] == filtro_modulo:
-                    with st.container():
-                        st.markdown(f"""
-                            <div style='background-color: #151922; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 20px; margin-bottom: 16px;'>
-                                <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;'>
-                                    <span style='font-size: 0.75rem; font-weight: 600; color: #3B82F6; background: rgba(59,130,246,0.1); padding: 3px 8px; border-radius: 4px;'>{regra['id_interno']}</span>
-                                    <span style='font-size: 0.78rem; color: #9AA3B2;'>{regra['modulo']} • Tabela {regra['tabela']}</span>
-                                </div>
-                                <div style='font-size: 0.95rem; font-weight: 600; color: #F5F7FA; margin-bottom: 8px;'>{regra['regra']}</div>
-                                <div style='font-size: 0.85rem; color: #9AA3B2; margin-bottom: 12px; font-family: monospace; background: #0B0D10; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);'>{regra['mensagem_original']}</div>
-                                <div style='font-size: 0.85rem; color: #CBD5E1; margin-bottom: 6px;'><strong>Causa:</strong> {regra['causa']}</div>
-                                <div style='font-size: 0.85rem; color: #CBD5E1; margin-bottom: 12px;'><strong>Correção:</strong> {regra['correcao']}</div>
-                                <div style='font-size: 0.75rem; color: #64748B;'>{regra['fonte']}</div>
+                    st.markdown(f"""
+                        <div style='background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px; padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);'>
+                            <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;'>
+                                <span style='font-size: 0.73rem; font-weight: 600; color: #2563EB; background: #EFF6FF; padding: 2px 8px; border-radius: 4px;'>{regra['id_interno']}</span>
+                                <span style='font-size: 0.78rem; color: #64748B;'>{regra['modulo']} • Tabela {regra['tabela']}</span>
                             </div>
-                        """, unsafe_allow_html=True)
+                            <div style='font-size: 0.93rem; font-weight: 600; color: #0F172A; margin-bottom: 6px;'>{regra['regra']}</div>
+                            <div style='font-size: 0.83rem; color: #475569; margin-bottom: 10px; font-family: monospace; background: #F8FAFC; padding: 6px 10px; border-radius: 6px; border: 1px solid #E2E8F0;'>{regra['mensagem_original']}</div>
+                            <div style='font-size: 0.83rem; color: #334155; margin-bottom: 4px;'><strong>Causa:</strong> {regra['causa']}</div>
+                            <div style='font-size: 0.83rem; color: #334155; margin-bottom: 10px;'><strong>Correção:</strong> {regra['correcao']}</div>
+                            <div style='font-size: 0.73rem; color: #94A3B8;'>{regra['fonte']}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
                         
     with tab_tabelas:
-        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height: 0.8rem;'></div>", unsafe_allow_html=True)
         for tab in BASE_CONHECIMENTO_SIM_2026["tabelas"]:
             texto_tab_completo = f"tabela {tab['tabela']} {tab['nome']} {tab['modulo']} {tab['finalidade']}".lower()
             if termo_busca.lower() in texto_tab_completo or not termo_busca:
                 st.markdown(f"""
-                    <div style='background-color: #151922; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 18px; margin-bottom: 14px;'>
-                        <div style='display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px;'>
-                            <span style='font-size: 1rem; font-weight: 700; color: #3B82F6;'>{tab['tabela']}</span>
-                            <span style='font-size: 0.95rem; font-weight: 600; color: #F5F7FA;'>{tab['nome']}</span>
-                            <span style='font-size: 0.75rem; color: #9AA3B2; margin-left: auto;'>{tab['modulo']}</span>
+                    <div style='background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);'>
+                        <div style='display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px;'>
+                            <span style='font-size: 0.95rem; font-weight: 700; color: #2563EB;'>{tab['tabela']}</span>
+                            <span style='font-size: 0.9rem; font-weight: 600; color: #0F172A;'>{tab['nome']}</span>
+                            <span style='font-size: 0.75rem; color: #64748B; margin-left: auto;'>{tab['modulo']}</span>
                         </div>
-                        <p style='font-size: 0.85rem; color: #9AA3B2; margin: 0 0 10px 0;'>{tab['finalidade']}</p>
-                        <div style='font-size: 0.75rem; color: #64748B;'>{tab['fonte']}</div>
+                        <p style='font-size: 0.83rem; color: #475569; margin: 0 0 8px 0;'>{tab['finalidade']}</p>
+                        <div style='font-size: 0.73rem; color: #94A3B8;'>{tab['fonte']}</div>
                     </div>
                 """, unsafe_allow_html=True)
                     
     with tab_matematicas:
-        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height: 0.8rem;'></div>", unsafe_allow_html=True)
         for mat in BASE_CONHECIMENTO_SIM_2026["validacoes_matematicas"]:
             texto_mat_completo = f"{mat['id']} {mat['descricao']} {mat['formula']}".lower()
             if termo_busca.lower() in texto_mat_completo or not termo_busca:
                 st.markdown(f"""
-                    <div style='background-color: #151922; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 18px; margin-bottom: 14px;'>
-                        <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;'>
-                            <span style='font-size: 0.95rem; font-weight: 600; color: #F5F7FA;'>{mat['descricao']}</span>
-                            <span style='font-size: 0.75rem; font-weight: 600; color: #3B82F6; background: rgba(59,130,246,0.1); padding: 3px 8px; border-radius: 4px;'>{mat['id']}</span>
+                    <div style='background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);'>
+                        <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;'>
+                            <span style='font-size: 0.9rem; font-weight: 600; color: #0F172A;'>{mat['descricao']}</span>
+                            <span style='font-size: 0.73rem; font-weight: 600; color: #2563EB; background: #EFF6FF; padding: 2px 8px; border-radius: 4px;'>{mat['id']}</span>
                         </div>
-                        <div style='font-family: monospace; font-size: 0.85rem; color: #60A5FA; background: #0B0D10; padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.04);'>{mat['formula']}</div>
-                        <div style='font-size: 0.75rem; color: #64748B;'>{mat['fonte']}</div>
+                        <div style='font-family: monospace; font-size: 0.83rem; color: #1D4ED8; background: #F8FAFC; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; border: 1px solid #E2E8F0;'>{mat['formula']}</div>
+                        <div style='font-size: 0.73rem; color: #94A3B8;'>{mat['fonte']}</div>
                     </div>
                 """, unsafe_allow_html=True)
