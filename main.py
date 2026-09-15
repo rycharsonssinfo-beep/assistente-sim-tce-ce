@@ -5,36 +5,29 @@ import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 1. INVESTIGAÇÃO TÉCNICA E CORREÇÃO DO "KEYBOARD_DOUBLE..."
+# 1. CORREÇÃO TÉCNICA DEFINITIVA DO "KEYBOARD_DOUBLE..."
 # ==========================================
-# DIAGNÓSTICO DA ORIGEM DO PROBLEMA:
-# O texto literal "keyboard_double..." aparece no canto superior esquerdo da sidebar 
-# (geralmente no botão nativo de colapso/expansão da sidebar do Streamlit, representado 
-# internamente no Streamlit por ligatures de Material Symbols/Icons, como `keyboard_double_arrow_left` 
-# ou `keyboard_double_arrow_right`).
+# DIAGNÓSTICO E CORREÇÃO DA CAUSA RAIZ:
+# O texto literal "keyboard_double..." aparecia na interface porque regras CSS globais 
+# aplicavam `font-family` com `!important` em seletores genéricos (`div`, `span`, etc.).
+# Isso sobrescrevia a tipografia dos elementos internos do Streamlit (como o botão de colapso da sidebar),
+# impedindo o navegador de interpretar as ligatures dos ícones Material Symbols e exibindo-as como texto bruto.
 # 
-# CAUSA RAIZ:
-# No CSS anterior, existiam regras globais agressivas (como aplicar `font-family: 'Inter', sans-serif !important;` 
-# em seletores genéricos como `*`, `span`, ou elementos internos de componentes de controle). 
-# Quando uma regra global substitui a família de fontes (`font-family`) de elementos que dependem de 
-# fontes específicas de ícones (como a Material Symbols / Material Icons utilizada pelo Streamlit nos seus 
-# botões de controle internos), o navegador deixa de renderizar o caractere gráfico da fonte de ícones 
-# e passa a exibir o texto literal da ligature (ex: `keyboard_double_arrow_left` ou truncado como `keyboard_double...`).
-#
-# CORREÇÃO DEFINITIVA APLICADA:
-# - Removemos absolutamente qualquer regra CSS global com seletor `* { font-family: ... }` ou `span { font-family: ... }`.
-# - Isolamos a aplicação da fonte `Inter` estritamente aos elementos de texto e conteúdo estrutural da aplicação (títulos, parágrafos, blocos de chat), preservando intocada a família de fontes e as ligatures dos ícones nativos do Streamlit.
-# - Adicionamos uma regra direcionada e segura para estilizar o container de controle da sidebar sem sobrescrever suas fontes de ícones.
+# AÇÃO APLICADA NESTA VERSÃO:
+# - Remoção completa de qualquer regra CSS global ou abrangente em `span`, `div` ou `*`.
+# - Remoção de todas as tentativas anteriores de esconder o elemento com `display: none`, `text-indent: -9999px`, etc.
+# - Aplicação limpa e restrita da fonte `Inter` apenas ao contêiner raiz `.stApp` e aos títulos normativos (`h1` a `h6`),
+#   preservando totalmente a árvore de nós interna e as fontes de ícones nativas do Streamlit.
 # ==========================================
 
 st.set_page_config(
     page_title="Assistente SIM — TCE-CE",
-    page_icon="🛡",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS refinada para Light Mode moderno sem quebrar ligatures de ícones do Streamlit
+# Injeção CSS limpa, moderna (Light Mode) e sem interferir nas fontes internas do Streamlit
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -53,15 +46,15 @@ st.markdown("""
         --accent-hover: #1D4ED8;
     }
 
-    /* Fundo geral e estrutura da aplicação */
-    .stApp, html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        background-color: var(--bg-app) !important;
+    /* Aplicação segura da tipografia principal sem quebrar ícones nativos do Streamlit */
+    .stApp {
+        background-color: var(--bg-app);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: var(--text-main);
     }
 
-    /* APLICAÇÃO SEGURA DA TIPOGRAFIA: restrita a títulos, textos e elementos de conteúdo,
-       preservando integralmente as fontes de ícones nativas do Streamlit para evitar o bug de ligatures textuais. */
-    h1, h2, h3, h4, h5, h6, p, label, .stMarkdown, .stText, span:not([class*="material"]):not([data-testid*="icon"]) {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         color: var(--text-main);
     }
 
@@ -75,7 +68,7 @@ st.markdown("""
 
     /* Sidebar minimalista e elegante em Light Mode */
     section[data-testid="stSidebar"] {
-        background-color: var(--sidebar-bg) !important;
+        background-color: var(--sidebar-bg);
         border-right: 1px solid var(--border-subtle);
     }
     
@@ -88,74 +81,74 @@ st.markdown("""
 
     /* Estilização de Botões da Sidebar */
     section[data-testid="stSidebar"] .stButton button {
-        background-color: transparent !important;
-        border: 1px solid var(--border-subtle) !important;
-        border-radius: 8px !important;
-        color: var(--text-muted) !important;
-        font-weight: 500 !important;
-        font-size: 0.88rem !important;
-        text-align: left !important;
-        padding: 0.55rem 0.85rem !important;
+        background-color: transparent;
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        color: var(--text-muted);
+        font-weight: 500;
+        font-size: 0.88rem;
+        text-align: left;
+        padding: 0.55rem 0.85rem;
         transition: all 0.2s ease;
-        box-shadow: none !important;
+        box-shadow: none;
     }
 
     section[data-testid="stSidebar"] .stButton button:hover {
-        background-color: var(--surface-hover) !important;
-        color: var(--text-main) !important;
-        border-color: var(--border-strong) !important;
+        background-color: var(--surface-hover);
+        color: var(--text-main);
+        border-color: var(--border-strong);
     }
 
     /* Botão primário na sidebar (+ Nova análise) */
     section[data-testid="stSidebar"] .stButton button[kind="primary"] {
-        background-color: #EFF6FF !important;
-        border: 1px solid #BFDBFE !important;
-        color: var(--accent) !important;
-        font-weight: 600 !important;
+        background-color: #EFF6FF;
+        border: 1px solid #BFDBFE;
+        color: var(--accent);
+        font-weight: 600;
     }
     section[data-testid="stSidebar"] .stButton button[kind="primary"]:hover {
-        background-color: #DBEAFE !important;
-        color: var(--accent-hover) !important;
+        background-color: #DBEAFE;
+        color: var(--accent-hover);
     }
 
-    /* Estilização impecável do Chat Input fixo no rodapé (sem faixa branca indesejada) */
+    /* Estilização impecável do Chat Input fixo no rodapé (integrado e limpo) */
     [data-testid="stChatInput"] {
-        background-color: var(--bg-app) !important;
+        background-color: var(--bg-app);
         border-top: 1px solid var(--border-subtle);
         padding: 1rem 0;
     }
 
     [data-testid="stChatInput"] textarea {
-        background-color: #FFFFFF !important;
-        color: var(--text-main) !important;
-        border: 1px solid var(--border-strong) !important;
-        border-radius: 12px !important;
-        font-size: 0.95rem !important;
-        padding: 0.85rem 1rem !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+        background-color: #FFFFFF;
+        color: var(--text-main);
+        border: 1px solid var(--border-strong);
+        border-radius: 12px;
+        font-size: 0.95rem;
+        padding: 0.85rem 1rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
         transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
     [data-testid="stChatInput"] textarea:focus {
-        border-color: var(--accent) !important;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
 
     [data-testid="stChatInput"] button {
-        background-color: var(--accent) !important;
-        color: #ffffff !important;
-        border-radius: 8px !important;
-        margin: 4px !important;
+        background-color: var(--accent);
+        color: #ffffff;
+        border-radius: 8px;
+        margin: 4px;
         transition: background-color 0.2s ease;
     }
     [data-testid="stChatInput"] button:hover {
-        background-color: var(--accent-hover) !important;
+        background-color: var(--accent-hover);
     }
 
     /* Balões de mensagens nativos ajustados para Light Mode */
     [data-testid="stChatMessage"] {
-        background-color: transparent !important;
-        padding: 1.25rem 0 !important;
+        background-color: transparent;
+        padding: 1.25rem 0;
         border-bottom: 1px solid var(--border-subtle);
     }
 
@@ -177,17 +170,17 @@ st.markdown("""
     }
 
     .stTabs [aria-selected="true"] {
-        background-color: var(--surface-hover) !important;
-        color: var(--accent) !important;
-        border-color: var(--border-strong) !important;
+        background-color: var(--surface-hover);
+        color: var(--accent);
+        border-color: var(--border-strong);
     }
 
     /* Inputs de pesquisa */
     input {
-        background-color: #FFFFFF !important;
-        color: var(--text-main) !important;
-        border: 1px solid var(--border-strong) !important;
-        border-radius: 8px !important;
+        background-color: #FFFFFF;
+        color: var(--text-main);
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -372,7 +365,7 @@ with st.sidebar:
     st.markdown("""
         <div style='padding-top: 0.5rem; padding-bottom: 1.2rem;'>
             <div style='font-size: 0.95rem; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px;'>
-                <span>🛡</span> Assistente SIM
+                <span>🛡️</span> Assistente SIM
             </div>
             <div style='font-size: 0.75rem; color: #64748B; margin-top: 2px;'>TCE-CE • Manual 2026</div>
         </div>
@@ -429,7 +422,7 @@ if pagina == "Assistente":
     if not st.session_state["mensagens"]:
         st.markdown("""
             <div style='text-align: center; margin-top: 5rem; margin-bottom: 3rem;'>
-                <div style='font-size: 2.2rem; margin-bottom: 0.8rem;'>🛡</div>
+                <div style='font-size: 2.2rem; margin-bottom: 0.8rem;'>🛡️</div>
                 <h1 style='font-size: 1.4rem; font-weight: 600; color: #0F172A; margin-bottom: 0.4rem;'>Como posso ajudar?</h1>
                 <p style='font-size: 0.9rem; color: #64748B; max-width: 420px; margin: 0 auto; line-height: 1.5;'>
                     Descreva uma ocorrência, erro ou divergência do SIM para iniciar o diagnóstico.
@@ -442,7 +435,7 @@ if pagina == "Assistente":
             with st.chat_message("user", avatar="👤"):
                 st.markdown(msg["content"])
         else:
-            with st.chat_message("assistant", avatar="🛡"):
+            with st.chat_message("assistant", avatar="🛡️"):
                 st.markdown(msg["content"])
                 
     if prompt_usuario := st.chat_input("Digite uma dúvida ou cole a ocorrência do SIM..."):
@@ -450,7 +443,7 @@ if pagina == "Assistente":
         with st.chat_message("user", avatar="👤"):
             st.markdown(prompt_usuario)
             
-        with st.chat_message("assistant", avatar="🛡"):
+        with st.chat_message("assistant", avatar="🛡️"):
             with st.spinner("Analisando ocorrência..."):
                 resposta_ia = consultar_assistente_gemini(st.session_state["mensagens"][:-1], prompt_usuario)
                 st.markdown(resposta_ia)
