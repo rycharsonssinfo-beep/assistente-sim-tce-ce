@@ -43,7 +43,6 @@ st.markdown("""
         color: var(--text-main);
     }
 
-    /* Correção do padding superior para evitar que o título fique cortado */
     .block-container {
         padding-top: 2.5rem;
         padding-bottom: 7rem;
@@ -402,7 +401,7 @@ if pagina == "Assistente":
     
     if not st.session_state["mensagens"]:
         st.markdown("""
-            <div style='text-align: center; margin-top: 3.5rem; margin-bottom: 2.5rem;'>
+            <div style='text-align: center; margin-top: 4rem; margin-bottom: 3rem;'>
                 <div style='font-size: 2.5rem; margin-bottom: 0.8rem;'>🛡️</div>
                 <h1 style='font-size: 1.4rem; font-weight: 600; color: #0F172A; margin-bottom: 0.4rem;'>Como posso ajudar?</h1>
                 <p style='font-size: 0.9rem; color: #64748B; max-width: 450px; margin: 0 auto; line-height: 1.5;'>
@@ -410,29 +409,6 @@ if pagina == "Assistente":
                 </p>
             </div>
         """, unsafe_allow_html=True)
-        
-        # Botões de sugestão rápida (estilo Imagem 2)
-        cols_sug = st.columns(4)
-        sugestoes = [
-            ("📄", "Erro de validação"),
-            ("📊", "Divergência"),
-            ("💻", "Código inválido"),
-            ("📖", "Ocorrência do SIM")
-        ]
-        
-        for idx, (icone, texto_sug) in enumerate(sugestoes):
-            with cols_sug[idx]:
-                if st.button(f"{icone} {texto_sug}", key=f"sug_{idx}", use_container_width=True):
-                    prompt_inicial = f"Pode me ajudar com um {texto_sug.lower()}?"
-                    st.session_state["mensagens"].append({"role": "user", "content": prompt_inicial})
-                    with st.chat_message("user", avatar="👤"):
-                        st.markdown(prompt_inicial)
-                    with st.chat_message("assistant", avatar="🛡️"):
-                        with st.spinner("Analisando ocorrência..."):
-                            resp = consultar_assistente_gemini([], prompt_inicial)
-                            st.markdown(resp)
-                    st.session_state["mensagens"].append({"role": "assistant", "content": resp})
-                    st.rerun()
         
     for msg in st.session_state["mensagens"]:
         if msg["role"] == "user":
