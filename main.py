@@ -5,21 +5,8 @@ import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 1. CORREÇÃO TÉCNICA DEFINITIVA DO "KEYBOARD_DOUBLE..."
+# 1. CONFIGURAÇÃO DA PÁGINA E CSS
 # ==========================================
-# DIAGNÓSTICO E CORREÇÃO DA CAUSA RAIZ:
-# O texto literal "keyboard_double..." aparecia na interface porque regras CSS globais 
-# aplicavam `font-family` com `!important` em seletores genéricos (`div`, `span`, etc.).
-# Isso sobrescrevia a tipografia dos elementos internos do Streamlit (como o botão de colapso da sidebar),
-# impedindo o navegador de interpretar as ligatures dos ícones Material Symbols e exibindo-as como texto bruto.
-# 
-# AÇÃO APLICADA NESTA VERSÃO:
-# - Remoção completa de qualquer regra CSS global ou abrangente em `span`, `div` ou `*`.
-# - Remoção de todas as tentativas anteriores de esconder o elemento com `display: none`, `text-indent: -9999px`, etc.
-# - Aplicação limpa e restrita da fonte `Inter` apenas ao contêiner raiz `.stApp` e aos títulos normativos (`h1` a `h6`),
-#   preservando totalmente a árvore de nós interna e as fontes de ícones nativas do Streamlit.
-# ==========================================
-
 st.set_page_config(
     page_title="Assistente SIM — TCE-CE",
     page_icon="🛡️",
@@ -27,7 +14,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS limpa, moderna (Light Mode) e sem interferir nas fontes internas do Streamlit
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -46,7 +32,6 @@ st.markdown("""
         --accent-hover: #1D4ED8;
     }
 
-    /* Aplicação segura da tipografia principal sem quebrar ícones nativos do Streamlit */
     .stApp {
         background-color: var(--bg-app);
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -58,15 +43,14 @@ st.markdown("""
         color: var(--text-main);
     }
 
-    /* Layout Principal centralizado com largura de leitura ideal (max 900px) */
+    /* Correção do padding superior para evitar que o título fique cortado */
     .block-container {
-        padding-top: 2rem;
+        padding-top: 2.5rem;
         padding-bottom: 7rem;
         max-width: 900px;
         margin: 0 auto;
     }
 
-    /* Sidebar minimalista e elegante em Light Mode */
     section[data-testid="stSidebar"] {
         background-color: var(--sidebar-bg);
         border-right: 1px solid var(--border-subtle);
@@ -79,7 +63,6 @@ st.markdown("""
         max-width: 100%;
     }
 
-    /* Estilização de Botões da Sidebar */
     section[data-testid="stSidebar"] .stButton button {
         background-color: transparent;
         border: 1px solid var(--border-subtle);
@@ -99,7 +82,6 @@ st.markdown("""
         border-color: var(--border-strong);
     }
 
-    /* Botão primário na sidebar (+ Nova análise) */
     section[data-testid="stSidebar"] .stButton button[kind="primary"] {
         background-color: #EFF6FF;
         border: 1px solid #BFDBFE;
@@ -111,7 +93,6 @@ st.markdown("""
         color: var(--accent-hover);
     }
 
-    /* Estilização impecável do Chat Input fixo no rodapé (integrado e limpo) */
     [data-testid="stChatInput"] {
         background-color: var(--bg-app);
         border-top: 1px solid var(--border-subtle);
@@ -145,14 +126,12 @@ st.markdown("""
         background-color: var(--accent-hover);
     }
 
-    /* Balões de mensagens nativos ajustados para Light Mode */
     [data-testid="stChatMessage"] {
         background-color: transparent;
         padding: 1.25rem 0;
         border-bottom: 1px solid var(--border-subtle);
     }
 
-    /* Tabs modernas na Base de Regras */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent;
@@ -175,7 +154,6 @@ st.markdown("""
         border-color: var(--border-strong);
     }
 
-    /* Inputs de pesquisa */
     input {
         background-color: #FFFFFF;
         color: var(--text-main);
@@ -409,9 +387,12 @@ pagina = st.session_state["nav_atual"]
 if pagina == "Assistente":
     st.markdown("""
         <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid #E2E8F0; padding-bottom: 0.8rem;'>
-            <div>
-                <div style='font-size: 1.05rem; font-weight: 600; color: #0F172A;'>Assistente SIM</div>
-                <div style='font-size: 0.78rem; color: #64748B;'>Diagnóstico técnico especializado do SIM • TCE-CE</div>
+            <div style='display: flex; align-items: center; gap: 10px;'>
+                <span style='font-size: 1.4rem;'>🛡️</span>
+                <div>
+                    <div style='font-size: 1.1rem; font-weight: 700; color: #0F172A; line-height: 1.2;'>Assistente SIM</div>
+                    <div style='font-size: 0.78rem; color: #64748B;'>Diagnóstico técnico especializado do SIM • TCE-CE</div>
+                </div>
             </div>
             <div style='display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #059669;'>
                 <span style='width: 7px; height: 7px; background-color: #10B981; border-radius: 50%; display: inline-block;'></span> Online
@@ -421,14 +402,37 @@ if pagina == "Assistente":
     
     if not st.session_state["mensagens"]:
         st.markdown("""
-            <div style='text-align: center; margin-top: 5rem; margin-bottom: 3rem;'>
-                <div style='font-size: 2.2rem; margin-bottom: 0.8rem;'>🛡️</div>
+            <div style='text-align: center; margin-top: 3.5rem; margin-bottom: 2.5rem;'>
+                <div style='font-size: 2.5rem; margin-bottom: 0.8rem;'>🛡️</div>
                 <h1 style='font-size: 1.4rem; font-weight: 600; color: #0F172A; margin-bottom: 0.4rem;'>Como posso ajudar?</h1>
-                <p style='font-size: 0.9rem; color: #64748B; max-width: 420px; margin: 0 auto; line-height: 1.5;'>
+                <p style='font-size: 0.9rem; color: #64748B; max-width: 450px; margin: 0 auto; line-height: 1.5;'>
                     Descreva uma ocorrência, erro ou divergência do SIM para iniciar o diagnóstico.
                 </p>
             </div>
         """, unsafe_allow_html=True)
+        
+        # Botões de sugestão rápida (estilo Imagem 2)
+        cols_sug = st.columns(4)
+        sugestoes = [
+            ("📄", "Erro de validação"),
+            ("📊", "Divergência"),
+            ("💻", "Código inválido"),
+            ("📖", "Ocorrência do SIM")
+        ]
+        
+        for idx, (icone, texto_sug) in enumerate(sugestoes):
+            with cols_sug[idx]:
+                if st.button(f"{icone} {texto_sug}", key=f"sug_{idx}", use_container_width=True):
+                    prompt_inicial = f"Pode me ajudar com um {texto_sug.lower()}?"
+                    st.session_state["mensagens"].append({"role": "user", "content": prompt_inicial})
+                    with st.chat_message("user", avatar="👤"):
+                        st.markdown(prompt_inicial)
+                    with st.chat_message("assistant", avatar="🛡️"):
+                        with st.spinner("Analisando ocorrência..."):
+                            resp = consultar_assistente_gemini([], prompt_inicial)
+                            st.markdown(resp)
+                    st.session_state["mensagens"].append({"role": "assistant", "content": resp})
+                    st.rerun()
         
     for msg in st.session_state["mensagens"]:
         if msg["role"] == "user":
