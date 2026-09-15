@@ -314,7 +314,8 @@ Diretrizes para a resposta:
     contents.append({"role": "user", "parts": [ultima_mensagem]})
     
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=prompt_sistema)
+        # ATUALIZADO PARA O MODELO VIGENTE
+        model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=prompt_sistema)
         response = model.generate_content(contents)
         if response and response.text:
             return response.text
