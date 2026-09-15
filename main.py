@@ -5,7 +5,7 @@ import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA (LIGHT MODE CORPORATIVO)
+# 1. CONFIGURAÇÃO DA PÁGINA (DARK MODE PREMIUM / AI CHAT)
 # ==========================================
 st.set_page_config(
     page_title="Assistente SIM — TCE-CE",
@@ -14,24 +14,28 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS completa focada em chat limpo e profissional
+# Injeção CSS avançada para transformar o Streamlit em um Chatbot Moderno de IA (Dark Mode)
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
     :root {
-        --bg-app: #F8FAFC;
-        --surface-sidebar: #F1F5F9;
-        --surface-card: #FFFFFF;
-        --border-subtle: rgba(0, 0, 0, 0.06);
-        --border-strong: rgba(0, 0, 0, 0.12);
-        --text-main: #0F172A;
-        --text-muted: #475569;
+        --bg-app: #0B0D10;
+        --sidebar-bg: #101318;
+        --surface-card: #151922;
+        --surface-hover: #1E2330;
+        --border-subtle: rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.15);
+        --text-main: #F5F7FA;
+        --text-muted: #9AA3B2;
         --text-dim: #64748B;
-        --accent: #2563EB;
-        --accent-hover: #1D4ED8;
+        --accent: #3B82F6;
+        --accent-hover: #2563EB;
+        --user-bubble: #1E293B;
+        --ai-bubble: #151922;
     }
 
+    /* Reset global e Tipografia */
     .stApp, html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
         background-color: var(--bg-app) !important;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
@@ -56,25 +60,17 @@ st.markdown("""
         text-indent: 0px !important;
     }
 
+    /* Layout Principal centralizado com largura de leitura ideal */
     .block-container {
         padding-top: 2rem;
-        padding-bottom: 4rem;
-        max-width: 1200px;
-        padding-left: 2rem;
-        padding-right: 2rem;
+        padding-bottom: 6rem;
+        max-width: 920px;
+        margin: 0 auto;
     }
 
-    h1, h2, h3, h4, h5, h6, p, span, label, div {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-    }
-
-    h1, h2, h3, h4 {
-        color: var(--text-main) !important;
-        letter-spacing: -0.025em;
-    }
-
+    /* Sidebar minimalista e discreta */
     section[data-testid="stSidebar"] {
-        background-color: var(--surface-sidebar) !important;
+        background-color: var(--sidebar-bg) !important;
         border-right: 1px solid var(--border-subtle);
     }
     
@@ -82,26 +78,117 @@ st.markdown("""
         padding-top: 2rem;
         padding-left: 1.25rem;
         padding-right: 1.25rem;
+        max-width: 100%;
     }
 
-    .stButton button[kind="primary"] {
-        background-color: var(--accent) !important;
-        border: none !important;
-        border-radius: 6px !important;
+    /* Estilização de Botões da Sidebar para parecerem itens de navegação modernos */
+    section[data-testid="stSidebar"] .stButton button {
+        background-color: transparent !important;
+        border: 1px solid var(--border-subtle) !important;
+        border-radius: 8px !important;
+        color: var(--text-muted) !important;
+        font-weight: 500 !important;
+        font-size: 0.88rem !important;
+        text-align: left !important;
+        padding: 0.55rem 0.85rem !important;
+        transition: all 0.2s ease;
+        box-shadow: none !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton button:hover {
+        background-color: var(--surface-hover) !important;
+        color: var(--text-main) !important;
+        border-color: var(--border-strong) !important;
+    }
+
+    /* Botão primário na sidebar (Nova Análise) com destaque sutil e elegante */
+    section[data-testid="stSidebar"] .stButton button[kind="primary"] {
+        background-color: rgba(59, 130, 246, 0.15) !important;
+        border: 1px solid rgba(59, 130, 246, 0.3) !important;
+        color: #60A5FA !important;
         font-weight: 600 !important;
+    }
+    section[data-testid="stSidebar"] .stButton button[kind="primary"]:hover {
+        background-color: rgba(59, 130, 246, 0.25) !important;
+        color: #93C5FD !important;
+    }
+
+    /* Estilização do Chat Input (Rodapé flutuante moderno) */
+    [data-testid="stChatInput"] {
+        background-color: var(--bg-app) !important;
+        border-top: 1px solid var(--border-subtle);
+        padding: 1rem 0;
+    }
+
+    [data-testid="stChatInput"] textarea {
+        background-color: var(--surface-card) !important;
+        color: var(--text-main) !important;
+        border: 1px solid var(--border-strong) !important;
+        border-radius: 12px !important;
+        font-size: 0.95rem !important;
+        padding: 0.85rem 1rem !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+        transition: border-color 0.2s ease;
+    }
+
+    [data-testid="stChatInput"] textarea:focus {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+    }
+
+    [data-testid="stChatInput"] button {
+        background-color: var(--accent) !important;
         color: #ffffff !important;
+        border-radius: 8px !important;
+        margin: 4px !important;
         transition: background-color 0.2s ease;
     }
-    .stButton button[kind="primary"]:hover {
+    [data-testid="stChatInput"] button:hover {
         background-color: var(--accent-hover) !important;
     }
+
+    /* Balões de mensagens nativos ajustados para o tema */
+    [data-testid="stChatMessage"] {
+        background-color: transparent !important;
+        padding: 1.25rem 0 !important;
+        border-bottom: 1px solid var(--border-subtle);
+    }
     
-    /* Estilo customizado para mensagens de chat */
-    .chat-container {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        margin-bottom: 2rem;
+    /* Fontes e Tipografia geral */
+    h1, h2, h3, h4, h5, h6, p, span, label, div {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        color: var(--text-main);
+    }
+
+    /* Tabs modernas na Base de Regras */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent;
+        border-bottom: 1px solid var(--border-subtle);
+        padding-bottom: 0.5rem;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background-color: var(--surface-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        color: var(--text-muted);
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background-color: var(--surface-hover) !important;
+        color: var(--text-main) !important;
+        border-color: var(--border-strong) !important;
+    }
+
+    /* Inputs de pesquisa */
+    input {
+        background-color: var(--surface-card) !important;
+        color: var(--text-main) !important;
+        border: 1px solid var(--border-strong) !important;
+        border-radius: 8px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -200,24 +287,20 @@ def buscar_conhecimento_relevante(query):
     query_lower = query.lower()
     trechos_relevantes = []
     
-    # Busca nas regras
     for r in BASE_CONHECIMENTO_SIM_2026["regras"]:
         termos = [r["modulo"].lower(), r["tabela"], r["mensagem_original"].lower(), r["regra"].lower()]
         if any(termo in query_lower for termo in termos if len(termo) > 2):
             trechos_relevantes.append(r)
             
-    # Busca nas tabelas
     for t in BASE_CONHECIMENTO_SIM_2026["tabelas"]:
         if t["tabela"] in query_lower or t["nome"].lower() in query_lower or t["modulo"].lower() in query_lower:
             trechos_relevantes.append(t)
             
-    # Busca em validações matemáticas
     for m in BASE_CONHECIMENTO_SIM_2026["validacoes_matematicas"]:
         if m["id"].lower() in query_lower or m["descricao"].lower() in query_lower:
             trechos_relevantes.append(m)
             
     if not trechos_relevantes:
-        # Se não achar correspondência direta, retorna um resumo geral ou as regras principais para manter contexto
         return BASE_CONHECIMENTO_SIM_2026["regras"][:3]
         
     return trechos_relevantes
@@ -231,7 +314,7 @@ if api_key:
 
 def consultar_assistente_gemini(historico_conversas, ultima_mensagem):
     if not api_key:
-        return "### ⚠️ Erro de Configuração\nA chave da API Gemini não foi configurada nos segredos do Streamlit."
+        return "### ⚠️ Configuração Pendente\nA chave da API Gemini não foi configurada nos segredos da aplicação."
         
     contexto_filtrado = buscar_conhecimento_relevante(ultima_mensagem)
     
@@ -252,7 +335,7 @@ Diretrizes para a resposta:
   5. **Como corrigir**
   6. **Como validar a correção**
   7. **Fundamentação (Manual do SIM 2026)**
-- Confiança da resposta: Alta / Média."""
+- Inclua ao final em linha discreta: ● Alta confiança."""
 
     contents = []
     for msg in historico_conversas:
@@ -270,7 +353,7 @@ Diretrizes para a resposta:
         return f"""### ⚠️ Diagnóstico por Regra Normativa (SIM / TCE-CE)
 * **Contexto e Causa Raiz:** O erro reportado indica uma quebra de integridade referencial ou divergência nas chaves do módulo SIM.
 * **Plano de Correção:** Verifique os campos apontados no relatório de erro do validador e assegure a coerência dos dados de origem.
-*(Detalhe técnico: `{e}`)*"""
+*(Detalhe técnico: `{e}`)*\n\n● Média confiança"""
 
     return "Não foi possível gerar uma resposta no momento."
 
@@ -284,27 +367,28 @@ if "nav_atual" not in st.session_state:
     st.session_state["nav_atual"] = "Assistente"
 
 # ==========================================
-# 6. SIDEBAR SIMPLIFICADA (SAAS MODERNA)
+# 6. SIDEBAR MINIMALISTA E DISCRETA
 # ==========================================
 with st.sidebar:
+    # Identidade visual limpa no topo da sidebar
     st.markdown("""
-        <div style='padding-bottom: 0.5rem;'>
-            <div style='font-size: 0.95rem; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px;'>
+        <div style='padding-top: 0.5rem; padding-bottom: 1rem;'>
+            <div style='font-size: 0.95rem; font-weight: 700; color: #F5F7FA; display: flex; align-items: center; gap: 8px;'>
                 <span>🛡️</span> Assistente SIM
             </div>
-            <div style='font-size: 0.78rem; color: #475569; margin-top: 2px;'>Suporte Técnico Especializado</div>
+            <div style='font-size: 0.75rem; color: #9AA3B2; margin-top: 2px;'>TCE-CE • Manual 2026</div>
         </div>
     """, unsafe_allow_html=True)
     
-    st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
-    
-    if st.button("➕ Nova análise", key="btn_nova_analise", use_container_width=True, type="primary"):
+    # Botão de Nova Análise com destaque elegante
+    if st.button("＋ Nova análise", key="btn_nova_analise", use_container_width=True, type="primary"):
         st.session_state["mensagens"] = []
         st.session_state["nav_atual"] = "Assistente"
         st.rerun()
         
-    st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin: 1.2rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
     
+    # Navegação limpa
     nav_opcoes = {
         "Assistente": "💬 Assistente",
         "Regras": "📖 Base de Regras"
@@ -317,13 +401,13 @@ with st.sidebar:
             st.session_state["nav_atual"] = chave
             st.rerun()
 
-    st.markdown("<div style='margin: 2rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin: 2rem 0; border-top: 1px solid rgba(255,255,255,0.06);'></div>", unsafe_allow_html=True)
     
     st.markdown(
-        "<div style='font-size: 0.75rem; color: #64748B; line-height: 1.4;'>"
+        "<div style='font-size: 0.73rem; color: #64748B; line-height: 1.5;'>"
         "<strong>SIM • TCE-CE</strong><br>"
         "Manual do SIM 2026<br>"
-        "© 2026 Tribunal de Contas"
+        "Portaria nº 1227/2025"
         "</div>", 
         unsafe_allow_html=True
     )
@@ -334,25 +418,32 @@ with st.sidebar:
 pagina = st.session_state["nav_atual"]
 
 if pagina == "Assistente":
+    # Header minimalista da conversa
     st.markdown("""
-        <div style='margin-bottom: 1.5rem;'>
-            <h2 style='font-size: 1.5rem; font-weight: 700; margin-bottom: 0.2rem;'>Assistente Técnico SIM</h2>
-            <p style='color: #475569; font-size: 0.9rem; margin: 0;'>Tire dúvidas, investigue inconsistências e obtenha orientações precisas baseadas no Manual 2026.</p>
+        <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 1rem;'>
+            <div>
+                <div style='font-size: 1.1rem; font-weight: 600; color: #F5F7FA;'>Assistente SIM</div>
+                <div style='font-size: 0.78rem; color: #9AA3B2;'>Especialista em diagnóstico técnico do SIM • Manual 2026</div>
+            </div>
+            <div style='display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #10B981;'>
+                <span style='width: 7px; height: 7px; background-color: #10B981; border-radius: 50%; display: inline-block;'></span> Online
+            </div>
         </div>
     """, unsafe_allow_html=True)
     
-    # Se o chat estiver vazio, exibe mensagem inicial amigável
+    # Tela Inicial (Empty State moderna estilo Chatbot de IA)
     if not st.session_state["mensagens"]:
         st.markdown("""
-            <div style='background-color: #FFFFFF; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; padding: 24px; text-align: center; margin-bottom: 2rem;'>
-                <div style='font-size: 1.1rem; font-weight: 600; color: #0F172A; margin-bottom: 8px;'>Como posso ajudar com o SIM?</div>
-                <p style='font-size: 0.88rem; color: #475569; max-width: 500px; margin: 0 auto;'>
-                    Descreva o erro, cole uma ocorrência ou envie o trecho do relatório para iniciar o diagnóstico técnico.
+            <div style='text-align: center; margin-top: 6rem; margin-bottom: 4rem;'>
+                <div style='font-size: 2.5rem; margin-bottom: 1rem;'>🛡️</div>
+                <h1 style='font-size: 1.5rem; font-weight: 600; color: #F5F7FA; margin-bottom: 0.5rem;'>Assistente SIM</h1>
+                <p style='font-size: 0.95rem; color: #9AA3B2; max-width: 440px; margin: 0 auto 1.5rem auto; line-height: 1.5;'>
+                    Como posso ajudar com o SIM?<br>Descreva uma ocorrência, erro ou divergência para iniciar o diagnóstico.
                 </p>
             </div>
         """, unsafe_allow_html=True)
         
-    # Exibe o histórico de mensagens da conversa atual
+    # Exibe o histórico de mensagens da conversa atual no padrão de chat moderno
     for msg in st.session_state["mensagens"]:
         if msg["role"] == "user":
             with st.chat_message("user", avatar="👤"):
@@ -361,67 +452,86 @@ if pagina == "Assistente":
             with st.chat_message("assistant", avatar="🛡️"):
                 st.markdown(msg["content"])
                 
-    # Entrada do chat
-    if prompt_usuario := st.chat_input("Digite sua dúvida ou cole a ocorrência do SIM..."):
-        # Adiciona mensagem do usuário
+    # Entrada do chat (Input nativo do Streamlit estilizado via CSS no rodapé)
+    if prompt_usuario := st.chat_input("Digite uma dúvida ou cole a ocorrência do SIM..."):
         st.session_state["mensagens"].append({"role": "user", "content": prompt_usuario})
         with st.chat_message("user", avatar="👤"):
             st.markdown(prompt_usuario)
             
-        # Gera resposta do assistente
         with st.chat_message("assistant", avatar="🛡️"):
             with st.spinner("Analisando ocorrência..."):
                 resposta_ia = consultar_assistente_gemini(st.session_state["mensagens"][:-1], prompt_usuario)
                 st.markdown(resposta_ia)
                 
-        # Adiciona resposta ao histórico
         st.session_state["mensagens"].append({"role": "assistant", "content": resposta_ia})
 
 elif pagina == "Regras":
     st.markdown("""
-        <div style='margin-bottom: 1.5rem;'>
-            <h2 style='font-size: 1.5rem; font-weight: 700; margin-bottom: 0.2rem;'>Base de Regras SIM 2026</h2>
-            <p style='color: #475569; font-size: 0.9rem; margin: 0;'>Consulta estruturada ao conhecimento técnico oficial do Manual do SIM (Portaria nº 1227/2025 do TCE-CE).</p>
+        <div style='margin-bottom: 2rem;'>
+            <h2 style='font-size: 1.4rem; font-weight: 600; margin-bottom: 0.3rem; color: #F5F7FA;'>Base de Regras SIM 2026</h2>
+            <p style='color: #9AA3B2; font-size: 0.88rem; margin: 0;'>Conhecimento técnico estruturado do Manual do SIM (Portaria nº 1227/2025 do TCE-CE).</p>
         </div>
     """, unsafe_allow_html=True)
     
     termo_busca = st.text_input("🔍 Pesquisar na base de conhecimento", placeholder="Digite um termo, número de tabela, módulo ou regra...")
     
+    st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
+    
     tab_regras, tab_tabelas, tab_matematicas = st.tabs(["📌 Regras de Validação", "📊 Catálogo de Tabelas", "📐 Validações Matemáticas"])
     
     with tab_regras:
-        st.markdown("### Regras Oficiais Catalogadas")
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
         filtro_modulo = st.selectbox("Filtrar por Módulo", ["Todos"] + list(set(r["modulo"] for r in BASE_CONHECIMENTO_SIM_2026["regras"])))
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
         
         for regra in BASE_CONHECIMENTO_SIM_2026["regras"]:
-            # Aplicação de filtro por termo e módulo
             texto_regra_completo = f"{regra['id_interno']} {regra['modulo']} {regra['tabela']} {regra['regra']} {regra['mensagem_original']} {regra['causa']} {regra['correcao']}".lower()
             if termo_busca.lower() in texto_regra_completo or not termo_busca:
                 if filtro_modulo == "Todos" or regra["modulo"] == filtro_modulo:
-                    with st.container(border=True):
-                        st.markdown(f"**[{regra['id_interno']}] {regra['modulo']} — Tabela {regra['tabela']}**")
-                        st.markdown(f"**Regra:** {regra['regra']}")
-                        st.markdown(f"**Mensagem Original:** `{regra['mensagem_original']}`")
-                        st.markdown(f"**Causa Documentada:** {regra['causa']}")
-                        st.markdown(f"**Correção Recomendada:** {regra['correcao']}")
-                        st.caption(f"Fonte: {regra['fonte']}")
+                    with st.container():
+                        st.markdown(f"""
+                            <div style='background-color: #151922; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 20px; margin-bottom: 16px;'>
+                                <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;'>
+                                    <span style='font-size: 0.75rem; font-weight: 600; color: #3B82F6; background: rgba(59,130,246,0.1); padding: 3px 8px; border-radius: 4px;'>{regra['id_interno']}</span>
+                                    <span style='font-size: 0.78rem; color: #9AA3B2;'>{regra['modulo']} • Tabela {regra['tabela']}</span>
+                                </div>
+                                <div style='font-size: 0.95rem; font-weight: 600; color: #F5F7FA; margin-bottom: 8px;'>{regra['regra']}</div>
+                                <div style='font-size: 0.85rem; color: #9AA3B2; margin-bottom: 12px; font-family: monospace; background: #0B0D10; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);'>{regra['mensagem_original']}</div>
+                                <div style='font-size: 0.85rem; color: #CBD5E1; margin-bottom: 6px;'><strong>Causa:</strong> {regra['causa']}</div>
+                                <div style='font-size: 0.85rem; color: #CBD5E1; margin-bottom: 12px;'><strong>Correção:</strong> {regra['correcao']}</div>
+                                <div style='font-size: 0.75rem; color: #64748B;'>{regra['fonte']}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
                         
     with tab_tabelas:
-        st.markdown("### Tabelas do SIM 2026")
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
         for tab in BASE_CONHECIMENTO_SIM_2026["tabelas"]:
             texto_tab_completo = f"tabela {tab['tabela']} {tab['nome']} {tab['modulo']} {tab['finalidade']}".lower()
             if termo_busca.lower() in texto_tab_completo or not termo_busca:
-                with st.container(border=True):
-                    col1, col2 = st.columns([1, 4])
-                    col1.markdown(f"**Tabela {tab['tabela']}**")
-                    col2.markdown(f"**{tab['nome']}** (*{tab['modulo']}*)\n\n{tab['finalidade']}\n\n*Fonte: {tab['fonte']}*")
+                st.markdown(f"""
+                    <div style='background-color: #151922; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 18px; margin-bottom: 14px;'>
+                        <div style='display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px;'>
+                            <span style='font-size: 1rem; font-weight: 700; color: #3B82F6;'>{tab['tabela']}</span>
+                            <span style='font-size: 0.95rem; font-weight: 600; color: #F5F7FA;'>{tab['nome']}</span>
+                            <span style='font-size: 0.75rem; color: #9AA3B2; margin-left: auto;'>{tab['modulo']}</span>
+                        </div>
+                        <p style='font-size: 0.85rem; color: #9AA3B2; margin: 0 0 10px 0;'>{tab['finalidade']}</p>
+                        <div style='font-size: 0.75rem; color: #64748B;'>{tab['fonte']}</div>
+                    </div>
+                """, unsafe_allow_html=True)
                     
     with tab_matematicas:
-        st.markdown("### Fórmulas e Validações Matemáticas")
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
         for mat in BASE_CONHECIMENTO_SIM_2026["validacoes_matematicas"]:
             texto_mat_completo = f"{mat['id']} {mat['descricao']} {mat['formula']}".lower()
             if termo_busca.lower() in texto_mat_completo or not termo_busca:
-                with st.container(border=True):
-                    st.markdown(f"**{mat['descricao']}** (`{mat['id']}`)")
-                    st.code(mat['formula'], language="text")
-                    st.caption(mat['fonte'])
+                st.markdown(f"""
+                    <div style='background-color: #151922; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 18px; margin-bottom: 14px;'>
+                        <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;'>
+                            <span style='font-size: 0.95rem; font-weight: 600; color: #F5F7FA;'>{mat['descricao']}</span>
+                            <span style='font-size: 0.75rem; font-weight: 600; color: #3B82F6; background: rgba(59,130,246,0.1); padding: 3px 8px; border-radius: 4px;'>{mat['id']}</span>
+                        </div>
+                        <div style='font-family: monospace; font-size: 0.85rem; color: #60A5FA; background: #0B0D10; padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.04);'>{mat['formula']}</div>
+                        <div style='font-size: 0.75rem; color: #64748B;'>{mat['fonte']}</div>
+                    </div>
+                """, unsafe_allow_html=True)
