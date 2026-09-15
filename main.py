@@ -1,7 +1,6 @@
 import os
 import re
 import json
-import sqlite3
 import streamlit as st
 import google.generativeai as genai
 
@@ -9,13 +8,13 @@ import google.generativeai as genai
 # 1. CONFIGURAÇÃO DA PÁGINA (LIGHT MODE CORPORATIVO)
 # ==========================================
 st.set_page_config(
-    page_title="Análise TCE — Diagnóstico SIM",
+    page_title="Assistente SIM — TCE-CE",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS completa com a remoção definitiva do tooltip "keyboard_double"
+# Injeção CSS completa focada em chat limpo e profissional
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -24,7 +23,6 @@ st.markdown("""
         --bg-app: #F8FAFC;
         --surface-sidebar: #F1F5F9;
         --surface-card: #FFFFFF;
-        --surface-card-hover: #F8FAFC;
         --border-subtle: rgba(0, 0, 0, 0.06);
         --border-strong: rgba(0, 0, 0, 0.12);
         --text-main: #0F172A;
@@ -59,11 +57,11 @@ st.markdown("""
     }
 
     .block-container {
-        padding-top: 2.5rem;
+        padding-top: 2rem;
         padding-bottom: 4rem;
-        max-width: 1500px;
-        padding-left: 3rem;
-        padding-right: 3rem;
+        max-width: 1200px;
+        padding-left: 2rem;
+        padding-right: 2rem;
     }
 
     h1, h2, h3, h4, h5, h6, p, span, label, div {
@@ -86,19 +84,6 @@ st.markdown("""
         padding-right: 1.25rem;
     }
 
-    .stTextArea textarea, .stTextInput input {
-        background-color: #FFFFFF !important;
-        border: 1px solid var(--border-strong) !important;
-        color: var(--text-main) !important;
-        border-radius: 6px !important;
-        font-size: 0.92rem !important;
-        padding: 12px !important;
-    }
-    .stTextArea textarea:focus, .stTextInput input:focus {
-        border-color: var(--accent) !important;
-        box-shadow: 0 0 0 1px var(--accent) !important;
-    }
-
     .stButton button[kind="primary"] {
         background-color: var(--accent) !important;
         border: none !important;
@@ -110,250 +95,218 @@ st.markdown("""
     .stButton button[kind="primary"]:hover {
         background-color: var(--accent-hover) !important;
     }
+    
+    /* Estilo customizado para mensagens de chat */
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# Script auxiliar para remover tooltips do topo
-st.markdown("""
-    <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        const observer = new MutationObserver((mutations) => {
-            const toggleBtn = document.querySelector('[data-testid="collapsedControl"]');
-            if (toggleBtn) {
-                toggleBtn.removeAttribute('title');
-            }
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-    });
-    </script>
-""", unsafe_allow_html=True)
-
 # ==========================================
-# 2. PERSISTÊNCIA LOCAL (SQLITE) E BASE SIM 2026
+# 2. BASE DE CONHECIMENTO OFICIAL SIM 2026
 # ==========================================
-NOME_BANCO = "banco_sim_tce.db"
-
-# Base Oficial Consolidada extraída integralmente do Manual do SIM 2026
 BASE_CONHECIMENTO_SIM_2026 = {
-  "metadata": {
-    "documento": "Manual do Sistema de Informações Municipais – SIM",
-    "versao": "2026",
-    "aprovacao": "Portaria nº 1227/2025, publicada no DOE-TCE/CE em 19/12/2025",
-    "orgao": "Tribunal de Contas do Estado do Ceará (TCE-CE)",
-    "escopo": "Base de Conhecimento para motor de diagnóstico de erros",
-    "status_cobertura": "100% CONCLUÍDA"
-  },
-  "tabelas": [
-    {"tabela": "103", "nome": "Órgãos", "modulo": "Orçamento", "finalidade": "Identificar os órgãos da administração municipal e suas características cadastrais.", "paginas": "11", "fonte": "Manual do SIM 2026 — p. 11"},
-    {"tabela": "104", "nome": "Unidades Orçamentárias", "modulo": "Orçamento", "finalidade": "Identificar as unidades orçamentárias subordinadas aos órgãos.", "paginas": "11", "fonte": "Manual do SIM 2026 — p. 11"},
-    {"tabela": "106", "nome": "Contas Bancárias do Município", "modulo": "Orçamento / Financeiro", "finalidade": "Cadastrar as contas bancárias movimentadas pela gestão municipal.", "paginas": "45-47", "fonte": "Manual do SIM 2026 — p. 45"},
-    {"tabela": "107", "nome": "Contas Extra-Orçamentárias", "modulo": "Financeiro", "finalidade": "Relação de contas extra-orçamentárias do ente.", "paginas": "51-54", "fonte": "Manual do SIM 2026 — p. 51"},
-    {"tabela": "201", "nome": "Receita Prevista", "modulo": "Orçamento", "finalidade": "Demonstrar a previsão da receita orçamentária.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — Seção Orçamentária"},
-    {"tabela": "202", "nome": "Despesa Fixada", "modulo": "Orçamento", "finalidade": "Demonstrar a fixação da despesa orçamentária.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — Seção Orçamentária"},
-    {"tabela": "501", "nome": "Processos Administrativos para Contratações", "modulo": "Licitações", "finalidade": "Registrar os processos de contratação pública.", "paginas": "118-124", "fonte": "Manual do SIM 2026 — p. 118"},
-    {"tabela": "502", "nome": "Publicações de Processos Administrativos", "modulo": "Licitações", "finalidade": "Registrar os extratos de publicações de editais e atos licitatórios.", "paginas": "125-126", "fonte": "Manual do SIM 2026 — p. 125"},
-    {"tabela": "531", "nome": "Processos Administrativos para Parcerias – OSC", "modulo": "Terceiro Setor", "finalidade": "Registrar parcerias com Organizações da Sociedade Civil.", "paginas": "147-149", "fonte": "Manual do SIM 2026 — p. 147"},
-    {"tabela": "601", "nome": "Empenhos", "modulo": "Execução da Despesa", "finalidade": "Registrar os empenhos da despesa pública.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — Execução da Despesa"},
-    {"tabela": "604", "nome": "Notas de Pagamentos", "modulo": "Execução da Despesa", "finalidade": "Registrar as baixas por pagamento de despesas orçamentárias ou restos a pagar.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — p. 9"},
-    {"tabela": "612", "nome": "Liquidações", "modulo": "Execução da Despesa", "finalidade": "Registrar a liquidação das despesas públicas.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — Execução da Despesa"},
-    {"tabela": "620", "nome": "Pagamentos e Liquidações", "modulo": "Execução da Despesa", "finalidade": "Consolidar o movimento integrado de pagamentos e liquidações.", "paginas": "210-221", "fonte": "Manual do SIM 2026 — p. 210"},
-    {"tabela": "704", "nome": "Destinação de Remanejamentos (RTT)", "modulo": "Orçamento", "finalidade": "Registrar as movimentações orçamentárias de RTT.", "paginas": "222-224", "fonte": "Manual do SIM 2026 — p. 222"},
-    {"tabela": "705", "nome": "Movimentações de Fontes de Recursos", "modulo": "Orçamento", "finalidade": "Registrar remanejamentos de fontes de recursos.", "paginas": "225-230", "fonte": "Manual do SIM 2026 — p. 225"},
-    {"tabela": "958", "nome": "Folha de Pagamento", "modulo": "Pessoal", "finalidade": "Registrar os dados da folha de pagamento de pessoal.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — Módulo Pessoal"}
-  ],
-  "regras": [
-    {
-      "id_interno": "SIM-RULE-000001",
-      "modulo": "Execução da Despesa",
-      "tabela": "604",
-      "regra": "Toda despesa orçamentária ou restos a pagar exige liquidação prévia para poder ser paga.",
-      "mensagem_original": "Despesa orçamentária ou Restos a Pagar sem comprovação de liquidação prévia.",
-      "causa": "Pagamento efetuado sem o respectivo registro de liquidação no sistema.",
-      "correcao": "Enviar obrigatoriamente o registro de liquidação mantendo coerência nas datas.",
-      "fonte": "Manual do SIM 2026 — p. 9"
+    "metadata": {
+        "documento": "Manual do Sistema de Informações Municipais – SIM",
+        "versao": "2026",
+        "aprovacao": "Portaria nº 1227/2025, publicada no DOE-TCE/CE em 19/12/2025",
+        "orgao": "Tribunal de Contas do Estado do Ceará (TCE-CE)"
     },
-    {
-      "id_interno": "SIM-RULE-000002",
-      "modulo": "Pessoal",
-      "tabela": "958",
-      "regra": "Toda folha de pagamento deve ser plenamente liquidada ao final do mês de competência.",
-      "mensagem_original": "Divergência entre o valor da folha de pagamento e o total liquidado no mês.",
-      "causa": "Folha gerada sem o respectivo lançamento e envio das liquidações no mesmo mês.",
-      "correcao": "Garantir o lançamento e envio da liquidação integral da folha no mês de referência.",
-      "fonte": "Manual do SIM 2026 — p. 11"
-    },
-    {
-      "id_interno": "SIM-RULE-000003",
-      "modulo": "Execução da Despesa",
-      "tabela": "601",
-      "regra": "O somatório das liquidações (Tabela 612) vinculadas a um empenho não pode exceder o saldo total.",
-      "mensagem_original": "Valor liquidado superior ao saldo disponível no empenho.",
-      "causa": "Tentativa de liquidar valor superior ao empenhado ou ausência de reforço.",
-      "correcao": "Efetuar o reforço do empenho correspondente ou corrigir o valor da liquidação.",
-      "fonte": "Manual do SIM 2026 — p. 62"
-    },
-    {
-      "id_interno": "SIM-RULE-000004",
-      "modulo": "Licitações",
-      "tabela": "501",
-      "regra": "Toda contratação deve ser precedida de processo administrativo com modalidade válida.",
-      "mensagem_original": "Modalidade de licitação incompatível com o valor estimado ou objeto.",
-      "causa": "Erro na escolha da modalidade frente aos limites da lei vigente.",
-      "correcao": "Adequar a modalidade do processo administrativo ao valor estimado.",
-      "fonte": "Manual do SIM 2026 — p. 119"
-    },
-    {
-      "id_interno": "SIM-RULE-000005",
-      "modulo": "Orçamento / Receita",
-      "tabela": "201",
-      "regra": "A previsão da receita orçamentária deve refletir estritamente os valores aprovados na LOA.",
-      "mensagem_original": "Valor da receita diverge do montante autorizado na Lei Orçamentária Anual.",
-      "causa": "Lançamento incorreto de valores ou ausência de atualização de créditos adicionais.",
-      "correcao": "Conferir os valores com a LOA vigente e retificar na Tabela 201.",
-      "fonte": "Manual do SIM 2026 — p. 28"
-    }
-  ],
-  "validacoes_matematicas": [
-    {"id": "MAT-000001", "descricao": "Equalização entre receita prevista e despesa fixada", "formula": "Somatório(Receita 201) = Somatório(Despesa 202)", "fonte": "Manual do SIM 2026 — p. 26"},
-    {"id": "MAT-000002", "descricao": "Verificação de saldo de dotação no empenho", "formula": "Dotação Inicial + Créditos Adicionais - Empenhos >= 0", "fonte": "Manual do SIM 2026 — p. 34"},
-    {"id": "MAT-000003", "descricao": "Conferência do saldo de contas bancárias", "formula": "Saldo Final = Saldo Inicial + Entradas - Saídas", "fonte": "Manual do SIM 2026 — p. 48"}
-  ]
+    "tabelas": [
+        {"tabela": "103", "nome": "Órgãos", "modulo": "Orçamento", "finalidade": "Identificar os órgãos da administração municipal e suas características cadastrais.", "paginas": "11", "fonte": "Manual do SIM 2026 — p. 11"},
+        {"tabela": "104", "nome": "Unidades Orçamentárias", "modulo": "Orçamento", "finalidade": "Identificar as unidades orçamentárias subordinadas aos órgãos.", "paginas": "11", "fonte": "Manual do SIM 2026 — p. 11"},
+        {"tabela": "106", "nome": "Contas Bancárias do Município", "modulo": "Orçamento / Financeiro", "finalidade": "Cadastrar as contas bancárias movimentadas pela gestão municipal.", "paginas": "45-47", "fonte": "Manual do SIM 2026 — p. 45"},
+        {"tabela": "107", "nome": "Contas Extra-Orçamentárias", "modulo": "Financeiro", "finalidade": "Relação de contas extra-orçamentárias do ente.", "paginas": "51-54", "fonte": "Manual do SIM 2026 — p. 51"},
+        {"tabela": "201", "nome": "Receita Prevista", "modulo": "Orçamento", "finalidade": "Demonstrar a previsão da receita orçamentária.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — Seção Orçamentária"},
+        {"tabela": "202", "nome": "Despesa Fixada", "modulo": "Orçamento", "finalidade": "Demonstrar a fixação da despesa orçamentária.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — Seção Orçamentária"},
+        {"tabela": "501", "nome": "Processos Administrativos para Contratações", "modulo": "Licitações", "finalidade": "Registrar os processos de contratação pública.", "paginas": "118-124", "fonte": "Manual do SIM 2026 — p. 118"},
+        {"tabela": "502", "nome": "Publicações de Processos Administrativos", "modulo": "Licitações", "finalidade": "Registrar os extratos de publicações de editais e atos licitatórios.", "paginas": "125-126", "fonte": "Manual do SIM 2026 — p. 125"},
+        {"tabela": "531", "nome": "Processos Administrativos para Parcerias – OSC", "modulo": "Terceiro Setor", "finalidade": "Registrar parcerias com Organizações da Sociedade Civil.", "paginas": "147-149", "fonte": "Manual do SIM 2026 — p. 147"},
+        {"tabela": "601", "nome": "Empenhos", "modulo": "Execução da Despesa", "finalidade": "Registrar os empenhos da despesa pública.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — Execução da Despesa"},
+        {"tabela": "604", "nome": "Notas de Pagamentos", "modulo": "Execução da Despesa", "finalidade": "Registrar as baixas por pagamento de despesas orçamentárias ou restos a pagar.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — p. 9"},
+        {"tabela": "612", "nome": "Liquidações", "modulo": "Execução da Despesa", "finalidade": "Registrar a liquidação das despesas públicas.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — Execução da Despesa"},
+        {"tabela": "620", "nome": "Pagamentos e Liquidações", "modulo": "Execução da Despesa", "finalidade": "Consolidar o movimento integrado de pagamentos e liquidações.", "paginas": "210-221", "fonte": "Manual do SIM 2026 — p. 210"},
+        {"tabela": "704", "nome": "Destinação de Remanejamentos (RTT)", "modulo": "Orçamento", "finalidade": "Registrar as movimentações orçamentárias de RTT.", "paginas": "222-224", "fonte": "Manual do SIM 2026 — p. 222"},
+        {"tabela": "705", "nome": "Movimentações de Fontes de Recursos", "modulo": "Orçamento", "finalidade": "Registrar remanejamentos de fontes de recursos.", "paginas": "225-230", "fonte": "Manual do SIM 2026 — p. 225"},
+        {"tabela": "958", "nome": "Folha de Pagamento", "modulo": "Pessoal", "finalidade": "Registrar os dados da folha de pagamento de pessoal.", "paginas": "Diversas", "fonte": "Manual do SIM 2026 — Módulo Pessoal"}
+    ],
+    "regras": [
+        {
+            "id_interno": "SIM-RULE-000001",
+            "modulo": "Execução da Despesa",
+            "tabela": "604",
+            "regra": "Toda despesa orçamentária ou restos a pagar exige liquidação prévia para poder ser paga.",
+            "mensagem_original": "Despesa orçamentária ou Restos a Pagar sem comprovação de liquidação prévia.",
+            "causa": "Pagamento efetuado sem o respectivo registro de liquidação no sistema.",
+            "correcao": "Enviar obrigatoriamente o registro de liquidação mantendo coerência nas datas.",
+            "fonte": "Manual do SIM 2026 — p. 9"
+        },
+        {
+            "id_interno": "SIM-RULE-000002",
+            "modulo": "Pessoal",
+            "tabela": "958",
+            "regra": "Toda folha de pagamento deve ser plenamente liquidada ao final do mês de competência.",
+            "mensagem_original": "Divergência entre o valor da folha de pagamento e o total liquidado no mês.",
+            "causa": "Folha gerada sem o respectivo lançamento e envio das liquidações no mesmo mês.",
+            "correcao": "Garantir o lançamento e envio da liquidação integral da folha no mês de referência.",
+            "fonte": "Manual do SIM 2026 — p. 11"
+        },
+        {
+            "id_interno": "SIM-RULE-000003",
+            "modulo": "Execução da Despesa",
+            "tabela": "601",
+            "regra": "O somatório das liquidações (Tabela 612) vinculadas a um empenho não pode exceder o saldo total.",
+            "mensagem_original": "Valor liquidado superior ao saldo disponível no empenho.",
+            "causa": "Tentativa de liquidar valor superior ao empenhado ou ausência de reforço.",
+            "correcao": "Efetuar o reforço do empenho correspondente ou corrigir o valor da liquidação.",
+            "fonte": "Manual do SIM 2026 — p. 62"
+        },
+        {
+            "id_interno": "SIM-RULE-000004",
+            "modulo": "Licitações",
+            "tabela": "501",
+            "regra": "Toda contratação deve ser precedida de processo administrativo com modalidade válida.",
+            "mensagem_original": "Modalidade de licitação incompatível com o valor estimado ou objeto.",
+            "causa": "Erro na escolha da modalidade frente aos limites da lei vigente.",
+            "correcao": "Adequar a modalidade do processo administrativo ao valor estimado.",
+            "fonte": "Manual do SIM 2026 — p. 119"
+        },
+        {
+            "id_interno": "SIM-RULE-000005",
+            "modulo": "Orçamento / Receita",
+            "tabela": "201",
+            "regra": "A previsão da receita orçamentária deve refletir estritamente os valores aprovados na LOA.",
+            "mensagem_original": "Valor da receita diverge do montante autorizado na Lei Orçamentária Anual.",
+            "causa": "Lançamento incorreto de valores ou ausência de atualização de créditos adicionais.",
+            "correcao": "Conferir os valores com a LOA vigente e retificar na Tabela 201.",
+            "fonte": "Manual do SIM 2026 — p. 28"
+        }
+    ],
+    "validacoes_matematicas": [
+        {"id": "MAT-000001", "descricao": "Equalização entre receita prevista e despesa fixada", "formula": "Somatório(Receita 201) = Somatório(Despesa 202)", "fonte": "Manual do SIM 2026 — p. 26"},
+        {"id": "MAT-000002", "descricao": "Verificação de saldo de dotação no empenho", "formula": "Dotação Inicial + Créditos Adicionais - Empenhos >= 0", "fonte": "Manual do SIM 2026 — p. 34"},
+        {"id": "MAT-000003", "descricao": "Conferência do saldo de contas bancárias", "formula": "Saldo Final = Saldo Inicial + Entradas - Saídas", "fonte": "Manual do SIM 2026 — p. 48"}
+    ]
 }
 
-def inicializar_banco():
-    conn = sqlite3.connect(NOME_BANCO)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS casos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            erro TEXT UNIQUE,
-            resposta TEXT,
-            feedback INTEGER DEFAULT 0,
-            confianca TEXT DEFAULT 'Média',
-            validado INTEGER DEFAULT 0,
-            modulo TEXT DEFAULT 'Não identificado',
-            arquivo TEXT DEFAULT ''
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-def carregar_historico_db():
-    inicializar_banco()
-    conn = sqlite3.connect(NOME_BANCO)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, erro, resposta, feedback, confianca, validado, modulo, arquivo FROM casos ORDER BY id DESC")
-    dados = cursor.fetchall()
-    conn.close()
-    return [{
-        "id": row[0], "erro": row[1], "resposta": row[2], 
-        "feedback": row[3], "confianca": row[4], "validado": row[5],
-        "modulo": row[6], "arquivo": row[7]
-    } for row in dados]
-
-def salvar_caso_db(erro, resposta, confianca="Alta", validado=0, modulo="Não identificado", arquivo=""):
-    inicializar_banco()
-    if not erro or not resposta or len(resposta.strip()) < 10:
-        return
-    conn = sqlite3.connect(NOME_BANCO)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("""
-            INSERT OR IGNORE INTO casos (erro, resposta, feedback, confianca, validado, modulo, arquivo) 
-            VALUES (?, ?, 0, ?, ?, ?, ?)
-        """, (erro.strip(), resposta.strip(), confianca, validado, modulo, arquivo))
-        conn.commit()
-    except Exception:
-        pass
-    finally:
-        conn.close()
-
-def exportar_base_json():
-    historico = carregar_historico_db()
-    dados_completos = {
-        "historico_analises": [{
-            "erro": item["erro"], "resposta": item["resposta"], 
-            "feedback": item["feedback"], "confianca": item["confianca"],
-            "validado": item["validado"], "modulo": item["modulo"], "arquivo": item["arquivo"]
-        } for item in historico],
-        "base_conhecimento_sim_2026": BASE_CONHECIMENTO_SIM_2026
-    }
-    return json.dumps(dados_completos, ensure_ascii=False, indent=4)
-
-if "historico_casos" not in st.session_state:
-    st.session_state["historico_casos"] = carregar_historico_db()
-
-if "nav_atual" not in st.session_state:
-    st.session_state["nav_atual"] = "Diagnóstico"
+# ==========================================
+# 3. MOTOR DE RAG / BUSCA INTELIGENTE NA BASE
+# ==========================================
+def buscar_conhecimento_relevante(query):
+    query_lower = query.lower()
+    trechos_relevantes = []
+    
+    # Busca nas regras
+    for r in BASE_CONHECIMENTO_SIM_2026["regras"]:
+        termos = [r["modulo"].lower(), r["tabela"], r["mensagem_original"].lower(), r["regra"].lower()]
+        if any(termo in query_lower for termo in termos if len(termo) > 2):
+            trechos_relevantes.append(r)
+            
+    # Busca nas tabelas
+    for t in BASE_CONHECIMENTO_SIM_2026["tabelas"]:
+        if t["tabela"] in query_lower or t["nome"].lower() in query_lower or t["modulo"].lower() in query_lower:
+            trechos_relevantes.append(t)
+            
+    # Busca em validações matemáticas
+    for m in BASE_CONHECIMENTO_SIM_2026["validacoes_matematicas"]:
+        if m["id"].lower() in query_lower or m["descricao"].lower() in query_lower:
+            trechos_relevantes.append(m)
+            
+    if not trechos_relevantes:
+        # Se não achar correspondência direta, retorna um resumo geral ou as regras principais para manter contexto
+        return BASE_CONHECIMENTO_SIM_2026["regras"][:3]
+        
+    return trechos_relevantes
 
 # ==========================================
-# 3. INTELIGÊNCIA ARTIFICIAL (GEMINI)
+# 4. CONFIGURAÇÃO DA API GEMINI
 # ==========================================
-def classificar_erro(texto):
-    if not texto:
-        return "LCO", "Contratos e Aditivos"
-    t_lower = texto.lower()
-    sigla_encontrada = "LCO"
-    for ext in ["bas", "lic", "lco", "vcl", "pat", "cpf", "dcd", "ne"]:
-        if f".{ext}" in t_lower or ext in t_lower:
-            sigla_encontrada = ext.upper()
-            break
-    return sigla_encontrada, "Contratos e Aditivos"
-
 api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 if api_key:
     genai.configure(api_key=api_key)
 
-def chamar_gemini_seguro(prompt_usuario):
+def consultar_assistente_gemini(historico_conversas, ultima_mensagem):
     if not api_key:
-        return """### ⚠️ Erro de Configuração\nA chave da API Gemini não foi configurada nos segredos do Streamlit.""", "Baixa"
+        return "### ⚠️ Erro de Configuração\nA chave da API Gemini não foi configurada nos segredos do Streamlit."
+        
+    contexto_filtrado = buscar_conhecimento_relevante(ultima_mensagem)
     
-    prompt_sistema = f"""Você é um Auditor Especialista Sênior e Analista Técnico do Sistema Integrado Municipal (SIM) do Tribunal de Contas do Estado do Ceará (TCE-CE). 
-Utilize como base técnica oficial a seguinte base estruturada do Manual do SIM 2026: {json.dumps(BASE_CONHECIMENTO_SIM_2026, ensure_ascii=False)}.
-Analise rigorosamente o relatório de inconsistência ou erro de remessa enviado pelo usuário.
+    prompt_sistema = f"""Você é um assistente técnico sênior especializado no SIM — Sistema de Informações Municipais do Tribunal de Contas do Estado do Ceará (TCE-CE), com base no Manual do SIM 2026.
+Seu objetivo é ajudar técnicos e operadores a diagnosticar erros, inconsistências e divergências de remessa de arquivos.
 
-Estruture sua resposta obrigatoriamente nos seguintes tópicos em Markdown bem formatado:
-1. **Contexto Normativo e Módulo Afetado:** Identifique claramente a finalidade do arquivo e o impacto da falha perante as normativas do TCE-CE.
-2. **Causa Raiz Detalhada:** Explique tecnicamente o motivo da rejeição com base nas regras do SIM 2026.
-3. **Plano de Correção Prático:** Forneça um passo a passo objetivo de como o operador deve ajustar os dados.
-4. **Validação Técnica Recomendada:** Indique como conferir o resultado antes de submeter uma nova remessa."""
+Contexto técnico recuperado do Manual do SIM 2026 para auxiliar nesta dúvida:
+{json.dumps(contexto_filtrado, ensure_ascii=False, indent=2)}
+
+Diretrizes para a resposta:
+- Seja objetivo, técnico e direto ao ponto.
+- Se o usuário enviou uma mensagem genérica ou incompleta (ex: "erro na LCO" ou "problema na tabela 604"), conduza a investigação pedindo a mensagem exata do erro, arquivo ou linha correspondente.
+- Se o usuário enviou uma ocorrência clara, estruture o diagnóstico obrigatoriamente nos seguintes tópicos:
+  1. **O que significa o erro / Contexto**
+  2. **Onde está o problema**
+  3. **Provável causa**
+  4. **Dados que devem ser conferidos**
+  5. **Como corrigir**
+  6. **Como validar a correção**
+  7. **Fundamentação (Manual do SIM 2026)**
+- Confiança da resposta: Alta / Média."""
+
+    contents = []
+    for msg in historico_conversas:
+        role = "user" if msg["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [msg["content"]]})
+        
+    contents.append({"role": "user", "parts": [ultima_mensagem]})
     
     try:
-        model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=prompt_sistema)
-        response = model.generate_content(prompt_usuario)
+        model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=prompt_sistema)
+        response = model.generate_content(contents)
         if response and response.text:
-            return response.text, "Alta"
+            return response.text
     except Exception as e:
-        diagnostico_offline = f"""### ⚠️ Diagnóstico por Regra Normativa (SIM / TCE-CE)
-* **Contexto e Causa Raiz:** O erro reportado indica uma quebra de integridade referencial ou divergência nas chaves compostas do módulo (como chaves de município, órgão, unidade, dotação ou notas de empenho/liquidação). O sistema SIM exige correspondência exata.
-* **Plano de Correção:** Verifique os campos apontados no relatório de erro do validador, assegurando que o arquivo pai correspondente foi enviado.
-* **Validação Técnica:** Ajuste o registro na origem e reexecute a validação.
+        return f"""### ⚠️ Diagnóstico por Regra Normativa (SIM / TCE-CE)
+* **Contexto e Causa Raiz:** O erro reportado indica uma quebra de integridade referencial ou divergência nas chaves do módulo SIM.
+* **Plano de Correção:** Verifique os campos apontados no relatório de erro do validador e assegure a coerência dos dados de origem.
+*(Detalhe técnico: `{e}`)*"""
 
-*(Detalhe técnico do ambiente: `{e}`)*"""
-        return diagnostico_offline, "Média"
-        
-    return "Não foi possível gerar resposta.", "Média"
+    return "Não foi possível gerar uma resposta no momento."
 
 # ==========================================
-# 4. SIDEBAR SAAS MODERNA (LIGHT MODE)
+# 5. GERENCIAMENTO DE ESTADO DA SESSÃO (CHAT)
+# ==========================================
+if "mensagens" not in st.session_state:
+    st.session_state["mensagens"] = []
+
+if "nav_atual" not in st.session_state:
+    st.session_state["nav_atual"] = "Assistente"
+
+# ==========================================
+# 6. SIDEBAR SIMPLIFICADA (SAAS MODERNA)
 # ==========================================
 with st.sidebar:
     st.markdown("""
         <div style='padding-bottom: 0.5rem;'>
             <div style='font-size: 0.95rem; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px;'>
-                <span>🛡️</span> Análise TCE
+                <span>🛡️</span> Assistente SIM
             </div>
-            <div style='font-size: 0.78rem; color: #475569; margin-top: 2px;'>Plataforma de Auditoria Municipal</div>
+            <div style='font-size: 0.78rem; color: #475569; margin-top: 2px;'>Suporte Técnico Especializado</div>
         </div>
     """, unsafe_allow_html=True)
     
     st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
     
-    st.markdown("<div style='font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;'>Workspace</div>", unsafe_allow_html=True)
+    if st.button("➕ Nova análise", key="btn_nova_analise", use_container_width=True, type="primary"):
+        st.session_state["mensagens"] = []
+        st.session_state["nav_atual"] = "Assistente"
+        st.rerun()
+        
+    st.markdown("<div style='margin: 1rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
     
     nav_opcoes = {
-        "Diagnóstico": "🔍 Diagnóstico de Ocorrências",
-        "Historico": "📚 Histórico Registrado",
+        "Assistente": "💬 Assistente",
         "Regras": "📖 Base de Regras"
     }
     
@@ -364,149 +317,111 @@ with st.sidebar:
             st.session_state["nav_atual"] = chave
             st.rerun()
 
-    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
-    st.markdown("<div style='font-size: 0.72rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;'>Gerenciamento</div>", unsafe_allow_html=True)
-    
-    total_casos = len(st.session_state['historico_casos'])
-    st.markdown(f"""
-        <div style='background-color: #FFFFFF; border: 1px solid rgba(0,0,0,0.08); border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;'>
-            <span style='font-size: 0.8rem; color: #475569;'>Casos Catalogados</span>
-            <span style='font-size: 0.85rem; font-weight: 600; color: #0F172A;'>{total_casos}</span>
-        </div>
-    """, unsafe_allow_html=True)
-
-    st.download_button(
-        "📥 Exportar Backup (.JSON)", 
-        data=exportar_base_json(), 
-        file_name="backup_sim_2026.json", 
-        mime="application/json", 
-        use_container_width=True
-    )
-    
-    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin: 2rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
     
     st.markdown(
         "<div style='font-size: 0.75rem; color: #64748B; line-height: 1.4;'>"
-        "<strong>Sistema Integrado Municipal</strong><br>"
-        "Tribunal de Contas do Estado do Ceará<br>"
-        "© 2026 TCE-CE"
+        "<strong>SIM • TCE-CE</strong><br>"
+        "Manual do SIM 2026<br>"
+        "© 2026 Tribunal de Contas"
         "</div>", 
         unsafe_allow_html=True
     )
 
 # ==========================================
-# 5. HEADER PRINCIPAL / CONTEXTO DA APLICAÇÃO
+# 7. CORPO DA APLICAÇÃO (TELAS)
 # ==========================================
-st.markdown("""
-    <div style='margin-bottom: 2rem;'>
-        <div style='font-size: 0.75rem; font-weight: 600; color: #2563EB; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;'>Auditoria Municipal SIM</div>
-        <h1 style='font-size: 1.75rem; font-weight: 700; margin-bottom: 0.2rem;'>Análise TCE — Diagnóstico de Ocorrências</h1>
-        <p style='color: #475569; font-size: 0.92rem; margin: 0;'>Ambiente corporativo integrado ao Manual do SIM 2026 para rastreabilidade de inconsistências.</p>
-    </div>
-""", unsafe_allow_html=True)
+pagina = st.session_state["nav_atual"]
 
-pagina_selecionada = st.session_state["nav_atual"]
-
-# ==========================================
-# 6. RENDERIZAÇÃO DE CONTEÚDO (WORKSPACE)
-# ==========================================
-
-if pagina_selecionada == "Diagnóstico":
-    col_main, col_side = st.columns([7, 3], gap="large")
+if pagina == "Assistente":
+    st.markdown("""
+        <div style='margin-bottom: 1.5rem;'>
+            <h2 style='font-size: 1.5rem; font-weight: 700; margin-bottom: 0.2rem;'>Assistente Técnico SIM</h2>
+            <p style='color: #475569; font-size: 0.9rem; margin: 0;'>Tire dúvidas, investigue inconsistências e obtenha orientações precisas baseadas no Manual 2026.</p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    with col_main:
+    # Se o chat estiver vazio, exibe mensagem inicial amigável
+    if not st.session_state["mensagens"]:
         st.markdown("""
-            <div style='margin-bottom: 1.25rem;'>
-                <h3 style='font-size: 1.15rem; font-weight: 600; margin-bottom: 0.2rem;'>Diagnóstico Inteligente</h3>
-                <p style='color: #475569; font-size: 0.88rem; margin: 0;'>Mapeamento oficial do SIM/TCE-CE para resolução rápida de inconsistências.</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        user_input = st.text_area(
-            "Relatório de ocorrência", 
-            height=160, 
-            placeholder="Cole aqui o relatório de erro do sistema SIM (Ex: LCO2026.TXT - Erro na linha 311)..."
-        )
-        
-        analisar_btn = st.button("Analisar ocorrência", type="primary")
-
-        if analisar_btn:
-            if user_input.strip():
-                with st.spinner("Processando auditoria inteligente..."):
-                    try:
-                        sigla_arq, modulo_identificado = classificar_erro(user_input)
-                        resposta_ia, conf = chamar_gemini_seguro(user_input)
-                    except Exception as err:
-                        resposta_ia = f"### ⚠️ Erro na execução\nOcorreu uma falha inesperada ao processar a requisição: `{err}`"
-                        conf = "Baixa"
-                        modulo_identificado = "Geral"
-                        sigla_arq = "TXT"
-                    
-                    st.markdown("<div style='margin: 1.5rem 0; border-top: 1px solid rgba(0,0,0,0.06);'></div>", unsafe_allow_html=True)
-                    st.markdown("""
-                        <div style='font-size: 0.85rem; font-weight: 600; color: #2563EB; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem;'>Resultado da Análise</div>
-                    """, unsafe_allow_html=True)
-                    st.markdown(resposta_ia)
-                    
-                    salvar_caso_db(user_input, resposta_ia, confianca=conf, modulo=modulo_identificado, arquivo=f".{sigla_arq}")
-                    st.session_state["historico_casos"] = carregar_historico_db()
-
-    with col_side:
-        st.markdown("""
-            <div style='background-color: #FFFFFF; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);'>
-                <div style='font-size: 0.85rem; font-weight: 600; color: #0F172A; margin-bottom: 10px;'>💡 Instruções de Uso</div>
-                <p style='font-size: 0.82rem; color: #475569; line-height: 1.5; margin-bottom: 12px;'>
-                    Cole o relatório completo gerado pelo validador do SIM para que a inteligência artificial identifique a causa raiz e a diretriz normativa correspondente com base no Manual 2026.
+            <div style='background-color: #FFFFFF; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; padding: 24px; text-align: center; margin-bottom: 2rem;'>
+                <div style='font-size: 1.1rem; font-weight: 600; color: #0F172A; margin-bottom: 8px;'>Como posso ajudar com o SIM?</div>
+                <p style='font-size: 0.88rem; color: #475569; max-width: 500px; margin: 0 auto;'>
+                    Descreva o erro, cole uma ocorrência ou envie o trecho do relatório para iniciar o diagnóstico técnico.
                 </p>
-                <div style='border-top: 1px solid rgba(0,0,0,0.06); padding-top: 10px;'>
-                    <span style='font-size: 0.78rem; color: #64748B;'>Módulos suportados: LCO, VCL, DCD, NE, BAS, PAT.</span>
-                </div>
             </div>
         """, unsafe_allow_html=True)
+        
+    # Exibe o histórico de mensagens da conversa atual
+    for msg in st.session_state["mensagens"]:
+        if msg["role"] == "user":
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(msg["content"])
+        else:
+            with st.chat_message("assistant", avatar="🛡️"):
+                st.markdown(msg["content"])
+                
+    # Entrada do chat
+    if prompt_usuario := st.chat_input("Digite sua dúvida ou cole a ocorrência do SIM..."):
+        # Adiciona mensagem do usuário
+        st.session_state["mensagens"].append({"role": "user", "content": prompt_usuario})
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(prompt_usuario)
+            
+        # Gera resposta do assistente
+        with st.chat_message("assistant", avatar="🛡️"):
+            with st.spinner("Analisando ocorrência..."):
+                resposta_ia = consultar_assistente_gemini(st.session_state["mensagens"][:-1], prompt_usuario)
+                st.markdown(resposta_ia)
+                
+        # Adiciona resposta ao histórico
+        st.session_state["mensagens"].append({"role": "assistant", "content": resposta_ia})
 
-elif pagina_selecionada == "Historico":
-    st.subheader("Histórico Registrado de Casos")
-    st.caption("Consulta de ocorrências previamente diagnosticadas e armazenadas.")
-    historico = st.session_state["historico_casos"]
-    if not historico:
-        st.info("Nenhum caso catalogado ainda.")
-    else:
-        for item in historico:
-            with st.container(border=True):
-                st.markdown(f"**Caso ID {item['id']} | Módulo: {item.get('modulo', 'Geral')}**")
-                st.code(item['erro'], language="text")
-                st.markdown(item['resposta'])
-
-elif pagina_selecionada == "Regras":
-    st.subheader("Base de Regras Oficiais do SIM 2026")
-    st.markdown("Diretrizes de integridade referencial, catálogos de tabelas e validações normativas extraídas do Manual do SIM 2026 (Portaria nº 1227/2025 do TCE-CE).")
+elif pagina == "Regras":
+    st.markdown("""
+        <div style='margin-bottom: 1.5rem;'>
+            <h2 style='font-size: 1.5rem; font-weight: 700; margin-bottom: 0.2rem;'>Base de Regras SIM 2026</h2>
+            <p style='color: #475569; font-size: 0.9rem; margin: 0;'>Consulta estruturada ao conhecimento técnico oficial do Manual do SIM (Portaria nº 1227/2025 do TCE-CE).</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    termo_busca = st.text_input("🔍 Pesquisar na base de conhecimento", placeholder="Digite um termo, número de tabela, módulo ou regra...")
     
     tab_regras, tab_tabelas, tab_matematicas = st.tabs(["📌 Regras de Validação", "📊 Catálogo de Tabelas", "📐 Validações Matemáticas"])
     
     with tab_regras:
         st.markdown("### Regras Oficiais Catalogadas")
         filtro_modulo = st.selectbox("Filtrar por Módulo", ["Todos"] + list(set(r["modulo"] for r in BASE_CONHECIMENTO_SIM_2026["regras"])))
+        
         for regra in BASE_CONHECIMENTO_SIM_2026["regras"]:
-            if filtro_modulo == "Todos" or regra["modulo"] == filtro_modulo:
-                with st.expander(f"[{regra['id_interno']}] {regra['modulo']} — Tabela {regra['tabela']}"):
-                    st.markdown(f"**Regra:** {regra['regra']}")
-                    st.markdown(f"**Mensagem Original:** `{regra['mensagem_original']}`")
-                    st.markdown(f"**Causa Documentada:** {regra['causa']}")
-                    st.markdown(f"**Correção Recomendada:** {regra['correcao']}")
-                    st.caption(f"Fonte: {regra['fonte']}")
-                    
+            # Aplicação de filtro por termo e módulo
+            texto_regra_completo = f"{regra['id_interno']} {regra['modulo']} {regra['tabela']} {regra['regra']} {regra['mensagem_original']} {regra['causa']} {regra['correcao']}".lower()
+            if termo_busca.lower() in texto_regra_completo or not termo_busca:
+                if filtro_modulo == "Todos" or regra["modulo"] == filtro_modulo:
+                    with st.container(border=True):
+                        st.markdown(f"**[{regra['id_interno']}] {regra['modulo']} — Tabela {regra['tabela']}**")
+                        st.markdown(f"**Regra:** {regra['regra']}")
+                        st.markdown(f"**Mensagem Original:** `{regra['mensagem_original']}`")
+                        st.markdown(f"**Causa Documentada:** {regra['causa']}")
+                        st.markdown(f"**Correção Recomendada:** {regra['correcao']}")
+                        st.caption(f"Fonte: {regra['fonte']}")
+                        
     with tab_tabelas:
         st.markdown("### Tabelas do SIM 2026")
         for tab in BASE_CONHECIMENTO_SIM_2026["tabelas"]:
-            with st.container(border=True):
-                col1, col2 = st.columns([1, 4])
-                col1.markdown(f"**Tabela {tab['tabela']}**")
-                col2.markdown(f"**{tab['nome']}** (*{tab['modulo']}*)\n\n{tab['finalidade']}\n\n*Fonte: {tab['fonte']}*")
-                
+            texto_tab_completo = f"tabela {tab['tabela']} {tab['nome']} {tab['modulo']} {tab['finalidade']}".lower()
+            if termo_busca.lower() in texto_tab_completo or not termo_busca:
+                with st.container(border=True):
+                    col1, col2 = st.columns([1, 4])
+                    col1.markdown(f"**Tabela {tab['tabela']}**")
+                    col2.markdown(f"**{tab['nome']}** (*{tab['modulo']}*)\n\n{tab['finalidade']}\n\n*Fonte: {tab['fonte']}*")
+                    
     with tab_matematicas:
         st.markdown("### Fórmulas e Validações Matemáticas")
         for mat in BASE_CONHECIMENTO_SIM_2026["validacoes_matematicas"]:
-            with st.container(border=True):
-                st.markdown(f"**{mat['descricao']}** (`{mat['id']}`)")
-                st.code(mat['formula'], language="text")
-                st.caption(mat['fonte'])
+            texto_mat_completo = f"{mat['id']} {mat['descricao']} {mat['formula']}".lower()
+            if termo_busca.lower() in texto_mat_completo or not termo_busca:
+                with st.container(border=True):
+                    st.markdown(f"**{mat['descricao']}** (`{mat['id']}`)")
+                    st.code(mat['formula'], language="text")
+                    st.caption(mat['fonte'])
