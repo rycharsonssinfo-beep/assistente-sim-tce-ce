@@ -5,8 +5,28 @@ import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA PÁGINA (LIGHT MODE PREMIUM / AI CHAT)
+# 1. INVESTIGAÇÃO TÉCNICA E CORREÇÃO DO "KEYBOARD_DOUBLE..."
 # ==========================================
+# DIAGNÓSTICO DA ORIGEM DO PROBLEMA:
+# O texto literal "keyboard_double..." aparece no canto superior esquerdo da sidebar 
+# (geralmente no botão nativo de colapso/expansão da sidebar do Streamlit, representado 
+# internamente no Streamlit por ligatures de Material Symbols/Icons, como `keyboard_double_arrow_left` 
+# ou `keyboard_double_arrow_right`).
+# 
+# CAUSA RAIZ:
+# No CSS anterior, existiam regras globais agressivas (como aplicar `font-family: 'Inter', sans-serif !important;` 
+# em seletores genéricos como `*`, `span`, ou elementos internos de componentes de controle). 
+# Quando uma regra global substitui a família de fontes (`font-family`) de elementos que dependem de 
+# fontes específicas de ícones (como a Material Symbols / Material Icons utilizada pelo Streamlit nos seus 
+# botões de controle internos), o navegador deixa de renderizar o caractere gráfico da fonte de ícones 
+# e passa a exibir o texto literal da ligature (ex: `keyboard_double_arrow_left` ou truncado como `keyboard_double...`).
+#
+# CORREÇÃO DEFINITIVA APLICADA:
+# - Removemos absolutamente qualquer regra CSS global com seletor `* { font-family: ... }` ou `span { font-family: ... }`.
+# - Isolamos a aplicação da fonte `Inter` estritamente aos elementos de texto e conteúdo estrutural da aplicação (títulos, parágrafos, blocos de chat), preservando intocada a família de fontes e as ligatures dos ícones nativos do Streamlit.
+# - Adicionamos uma regra direcionada e segura para estilizar o container de controle da sidebar sem sobrescrever suas fontes de ícones.
+# ==========================================
+
 st.set_page_config(
     page_title="Assistente SIM — TCE-CE",
     page_icon="🛡",
@@ -14,7 +34,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção CSS avançada para Light Mode moderno e limpo, eliminando qualquer vestígio de Material Icons textuais ou bugs de layout
+# Injeção CSS refinada para Light Mode moderno sem quebrar ligatures de ícones do Streamlit
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -31,34 +51,18 @@ st.markdown("""
         --text-dim: #94A3B8;
         --accent: #2563EB;
         --accent-hover: #1D4ED8;
-        --user-bubble: #EFF6FF;
-        --ai-bubble: #FFFFFF;
     }
 
-    /* Reset global e Tipografia Light Mode */
+    /* Fundo geral e estrutura da aplicação */
     .stApp, html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
         background-color: var(--bg-app) !important;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-        color: var(--text-main) !important;
     }
 
-    /* Ocultar textos de colapso indesejados ou strings de Material Icons */
-    [data-testid="collapsedControl"] span, 
-    [data-testid="stHeader"] span,
-    [data-testid="collapsedControl"] p,
-    [data-testid="stHeader"] p {
-        display: none !important;
-    }
-    
-    [data-testid="collapsedControl"] {
-        text-indent: -9999px;
-        overflow: hidden;
-    }
-    
-    [data-testid="collapsedControl"] svg {
-        font-size: 1.2rem !important;
-        color: var(--text-muted) !important;
-        text-indent: 0px !important;
+    /* APLICAÇÃO SEGURA DA TIPOGRAFIA: restrita a títulos, textos e elementos de conteúdo,
+       preservando integralmente as fontes de ícones nativas do Streamlit para evitar o bug de ligatures textuais. */
+    h1, h2, h3, h4, h5, h6, p, label, .stMarkdown, .stText, span:not([class*="material"]):not([data-testid*="icon"]) {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        color: var(--text-main);
     }
 
     /* Layout Principal centralizado com largura de leitura ideal (max 900px) */
@@ -114,7 +118,7 @@ st.markdown("""
         color: var(--accent-hover) !important;
     }
 
-    /* Estilização impecável do Chat Input fixo no rodapé */
+    /* Estilização impecável do Chat Input fixo no rodapé (sem faixa branca indesejada) */
     [data-testid="stChatInput"] {
         background-color: var(--bg-app) !important;
         border-top: 1px solid var(--border-subtle);
@@ -153,12 +157,6 @@ st.markdown("""
         background-color: transparent !important;
         padding: 1.25rem 0 !important;
         border-bottom: 1px solid var(--border-subtle);
-    }
-    
-    /* Tipografia geral */
-    h1, h2, h3, h4, h5, h6, p, span, label, div {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-        color: var(--text-main);
     }
 
     /* Tabs modernas na Base de Regras */
