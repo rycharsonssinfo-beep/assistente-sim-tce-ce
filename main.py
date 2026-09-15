@@ -315,7 +315,7 @@ Diretrizes para a resposta:
     
     try:
         # ATUALIZADO PARA O MODELO VIGENTE
-        model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=prompt_sistema)
+        model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=prompt_sistema)
         response = model.generate_content(contents)
         if response and response.text:
             return response.text
