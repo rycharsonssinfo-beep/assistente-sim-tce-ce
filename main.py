@@ -236,12 +236,14 @@ elif pagina == "Verificador":
                 else:
                     st.warning("Por favor, informe ao menos uma linha ou intervalo com erro.")
 
-    # ETAPA 2: UPLOAD OU COLETA DO ARQUIVO / RELATÓRIO
+    # ETAPA 2: UPLOAD OU COLETA DO ARQUIVO (SUPORTE TOTAL A QUALQUER EXTENSÃO DO SIM)
     elif etapa == 2:
         st.markdown("#### Envie o arquivo ou cole os dados do log do SIM")
         st.markdown(f"*Linhas com erro informadas na etapa anterior:* `{st.session_state['linhas_erro']}`")
         
-        arquivo_enviado = st.file_uploader("Enviar arquivo de log ou remessa do SIM", type=["txt", "csv", "json", "rem"])
+        # Sem restrição de extensão para aceitar .DCD, .CPF, .BAL, .LCO, .PAT, .VCL, etc.
+        arquivo_enviado = st.file_uploader("Enviar arquivo de remessa ou log do SIM")
+        
         log_input = st.text_area("Ou cole o conteúdo do arquivo/relatório de erros:", value=st.session_state["conteudo_arquivo_verificacao"], height=150)
         
         col_voltar, col_avancar = st.columns([1, 1])
