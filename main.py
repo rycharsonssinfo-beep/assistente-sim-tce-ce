@@ -61,10 +61,8 @@ def main():
         st.subheader("Módulo de Envio e Verificação de Erros do SIM")
         st.markdown("Carregue o seu ficheiro de dados do SIM (ex: CSV ou TXT) para inspecionar os erros linha a linha e validar os campos obrigatórios.")
         
-        # Componente para carregar o ficheiro real
         uploaded_file = st.file_uploader("Selecione o ficheiro do SIM (CSV, TXT)", type=["csv", "txt"])
         
-        # Campo para definir quais colunas são obrigatórias na validação
         campos_obrigatorios_input = st.text_input(
             "Campos obrigatórios (separados por vírgula)", 
             value="codigo_orgao, exercicio, valor"
@@ -119,8 +117,8 @@ def main():
             else:
                 with st.spinner("A IA está a analisar o seu pedido..."):
                     try:
-                        # Utiliza a chave configurada de forma nativa/secreta na plataforma
-                        model = genai.GenerativeModel('gemini-pro')
+                        # Utiliza o modelo atualizado gemini-1.5-flash configurado via segredos
+                        model = genai.GenerativeModel('gemini-1.5-flash')
                         response = model.generate_content(
                             f"Você é um especialista técnico em auditoria de contas públicas, divergências do SIM e padrões do TCE-CE. Analise o seguinte contexto:\n\n{prompt_usuario}"
                         )
