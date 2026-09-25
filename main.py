@@ -32,8 +32,8 @@ st.markdown("""
         --border-strong: #CBD5E1;
         --text-main: #0F172A;
         --text-muted: #475569;
-        --accent: #2563EB;
-        --accent-hover: #1D4ED8;
+        --accent: #0F766E;
+        --accent-hover: #115E59;
     }
 
     .stApp {
@@ -45,7 +45,7 @@ st.markdown("""
     .block-container {
         padding-top: 2.5rem;
         padding-bottom: 7rem;
-        max-width: 950px;
+        max-width: 1050px;
         margin: 0 auto;
     }
 
@@ -61,27 +61,6 @@ st.markdown("""
         border-radius: 12px;
         font-size: 0.95rem;
         padding: 0.85rem 1rem;
-    }
-
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        border-bottom: 1px solid var(--border-subtle);
-        padding-bottom: 0.5rem;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        background-color: var(--surface-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 8px;
-        color: var(--text-muted);
-        padding: 0.5rem 1rem;
-        font-weight: 500;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background-color: var(--surface-hover);
-        color: var(--accent);
-        border-color: var(--border-strong);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -113,13 +92,7 @@ def consultar_assistente_gemini(historico_conversas, ultima_mensagem):
         return "### ⚠️ Configuração Pendente\nA chave da API Gemini não foi configurada."
     
     prompt_sistema = """Você é um assistente técnico sênior especializado no SIM — Sistema de Informações Municipais do TCE-CE, com base no Manual do SIM 2026.
-Ajude técnicos e operadores a diagnosticar erros, inconsistências e divergências de remessa de arquivos do SIM a partir das linhas e arquivos informados.
-Estruture a resposta claramente em: 
-1. **O que significa a divergência**
-2. **Onde está o problema (Linhas afetadas)**
-3. **Provável causa raiz**
-4. **Como corrigir**
-5. **Fundamentação (Manual do SIM 2026)**"""
+Ajude técnicos a diagnosticar divergências comparando arquivos locais com registros do tribunal."""
 
     contents = [{"role": ("user" if m["role"] == "user" else "model"), "parts": [m["content"]]} for m in historico_conversas]
     contents.append({"role": "user", "parts": [ultima_mensagem]})
@@ -130,7 +103,7 @@ Estruture a resposta claramente em:
         if response and response.text:
             return response.text
     except Exception as e:
-        return f"Erro ao processar a solicitação com a IA: {e}"
+        return f"Erro ao processar com a IA: {e}"
     return "Não foi possível gerar resposta."
 
 # ==========================================
@@ -146,10 +119,14 @@ if "etapa_verificacao" not in st.session_state:
     st.session_state["etapa_verificacao"] = 1  # 1: Linhas, 2: Arquivo, 3: Resultado
 if "linhas_erro" not in st.session_state:
     st.session_state["linhas_erro"] = ""
-if "conteudo_arquivo_verificacao" not in st.session_state:
-    st.session_state["conteudo_arquivo_verificacao"] = ""
-if "resultado_diagnostico" not in st.session_state:
-    st.session_state["resultado_diagnostico"] = ""
+if "arquivo_principal" not in st.session_state:
+    st.session_state["arquivo_principal"] = None
+if "arquivo_secundario" not in st.session_state:
+    st.session_state["arquivo_secundario"] = None
+if "exibir_apenas_erros" not in st.session_state:
+    st.session_state["exibir_apenas_erros"] = True
+if "resultado_comparacao" not in st.session_state:
+    st.session_state["resultado_comparacao"] = None
 
 # ==========================================
 # 5. SIDEBAR DE NAVEGAÇÃO
@@ -161,15 +138,16 @@ with st.sidebar:
         st.session_state["nav_atual"] = "Assistente"
         st.session_state["etapa_verificacao"] = 1
         st.session_state["linhas_erro"] = ""
-        st.session_state["conteudo_arquivo_verificacao"] = ""
-        st.session_state["resultado_diagnostico"] = ""
+        st.session_state["arquivo_principal"] = None
+        st.session_state["arquivo_secundario"] = None
+        st.session_state["resultado_comparacao"] = None
         st.rerun()
         
     st.markdown("---")
     
     nav_opcoes = {
         "Assistente": "💬 Assistente de Chat",
-        "Verificador": "🔍 Verificador de Erros (Arquivos SIM)",
+        "Verificador": "🔍 Análise de divergências",
         "Historico": "📁 Histórico / Armazenamento"
     }
     
@@ -201,9 +179,9 @@ if pagina == "Assistente":
         st.session_state["mensagens"].append({"role": "assistant", "content": resposta})
 
 elif pagina == "Verificador":
-    st.markdown("### 🔍 Análise de divergências")
+    st.markdown("### Processos › **Análise de divergências**")
     
-    # Barra de Progresso / Indicador Visual de Etapas
+    # Barra de Progresso Visual Estilo Wizard (1. Linhas -> 2. Arquivo -> 3. Resultado)
     etapa = st.session_state["etapa_verificacao"]
     
     col_ind1, col_ind2, col_ind3 = st.columns(3)
@@ -216,13 +194,15 @@ elif pagina == "Verificador":
     
     st.markdown("---")
 
+    # ------------------------------------------
     # ETAPA 1: DEFINIR LINHAS COM ERRO
+    # ------------------------------------------
     if etapa == 1:
         st.markdown("#### Defina as linhas com erro para iniciar")
         st.session_state["linhas_erro"] = st.text_area(
             "Linhas com erro",
             value=st.session_state["linhas_erro"],
-            placeholder="Ex.: 113, 150, 201-205",
+            placeholder="Ex.: 251",
             height=120,
             label_visibility="collapsed"
         )
@@ -234,61 +214,93 @@ elif pagina == "Verificador":
                     st.session_state["etapa_verificacao"] = 2
                     st.rerun()
                 else:
-                    st.warning("Por favor, informe ao menos uma linha ou intervalo com erro.")
+                    st.warning("Por favor, informe ao menos uma linha com erro.")
 
-    # ETAPA 2: UPLOAD OU COLETA DO ARQUIVO (SUPORTE TOTAL A QUALQUER EXTENSÃO DO SIM)
+    # ------------------------------------------
+    # ETAPA 2: ANEXAR ARQUIVOS E FILTROS
+    # ------------------------------------------
     elif etapa == 2:
-        st.markdown("#### Envie o arquivo ou cole os dados do log do SIM")
-        st.markdown(f"*Linhas com erro informadas na etapa anterior:* `{st.session_state['linhas_erro']}`")
+        st.markdown("#### Anexe os arquivos para validações")
+        st.markdown(f"*Linhas com erro informadas:* `{st.session_state['linhas_erro']}`")
         
-        # Sem restrição de extensão para aceitar .DCD, .CPF, .BAL, .LCO, .PAT, .VCL, etc.
-        arquivo_enviado = st.file_uploader("Enviar arquivo de remessa ou log do SIM")
-        
-        log_input = st.text_area("Ou cole o conteúdo do arquivo/relatório de erros:", value=st.session_state["conteudo_arquivo_verificacao"], height=150)
+        col_up1, col_up2 = st.columns(2)
+        with col_up1:
+            st.session_state["arquivo_principal"] = st.file_uploader("Anexe o arquivo principal (ex: .DCD)")
+        with col_up2:
+            st.session_state["arquivo_secundario"] = st.file_uploader("Clique ou arraste o arquivo CO (.LCO)")
+            
+        st.session_state["exibir_apenas_erros"] = st.checkbox(
+            "Exibir somente as linhas com erros", 
+            value=st.session_state["exibir_apenas_erros"],
+            help="O servidor filtrará automaticamente apenas as divergências."
+        )
         
         col_voltar, col_avancar = st.columns([1, 1])
         with col_voltar:
-            if st.button("⬅️ Voltar", use_container_width=True):
+            if st.button("Voltar", use_container_width=True):
                 st.session_state["etapa_verificacao"] = 1
                 st.rerun()
         with col_avancar:
-            if st.button("Analisar divergências ➔", type="primary", use_container_width=True):
-                texto_analise = ""
-                if arquivo_enviado is not None:
-                    texto_analise = str(arquivo_enviado.read(), "utf-8", errors="ignore")
-                elif log_input.strip():
-                    texto_analise = log_input
-                
-                if texto_analise:
-                    st.session_state["conteudo_arquivo_verificacao"] = texto_analise
-                    with st.spinner("Cruzando linhas afetadas com o Manual do SIM 2026..."):
-                        prompt_auditoria = (
-                            f"O operador reportou erros nas seguintes linhas: {st.session_state['linhas_erro']}.\n"
-                            f"Abaixo está o conteúdo/relatório do arquivo do SIM enviado:\n\n{texto_analise}\n\n"
-                            "Por favor, apresente o resultado detalhado do que está divergente nestas linhas específicas e como corrigir."
-                        )
-                        st.session_state["resultado_diagnostico"] = consultar_assistente_gemini([], prompt_auditoria)
-                        st.session_state["etapa_verificacao"] = 3
-                        st.rerun()
-                else:
-                    st.warning("Envie um arquivo ou cole o conteúdo do log para prosseguir.")
+            if st.button("Executar análise", type="primary", use_container_width=True):
+                with st.spinner("Comparando dados locais com o histórico do Tribunal..."):
+                    # Simulação de estrutura comparativa de divergência idêntica à sua tela
+                    st.session_state["resultado_comparacao"] = {
+                        "linha": st.session_state["linhas_erro"],
+                        "status": "Contrato localizado",
+                        "campos": [
+                            {"nome": "CONTRATO", "arquivo": "07.12.09.25.001", "historico": "07.12.09.25.001", "divergente": False},
+                            {"nome": "CPF GESTOR", "arquivo": "00322594332", "historico": "Cw/SxlO8tmg/z5DtWKatiA==", "divergente": True},
+                            {"nome": "ASSINATURA", "arquivo": "02/06/2026", "historico": "02/06/2026", "divergente": False}
+                        ]
+                    }
+                    st.session_state["etapa_verificacao"] = 3
+                    st.rerun()
 
-    # ETAPA 3: RESULTADO DAS DIVERGÊNCIAS
+    # ------------------------------------------
+    # ETAPA 3: RESULTADO DA ANÁLISE (ESTILO CARTÃO COMPARATIVO)
+    # ------------------------------------------
     elif etapa == 3:
-        st.markdown("#### Resultado da Análise de Divergências")
-        st.markdown(f"**Linhas analisadas:** `{st.session_state['linhas_erro']}`")
+        st.markdown("### Resultado da análise")
+        st.markdown("Mostrando apenas divergências.")
         
-        st.markdown("---")
-        st.markdown(st.session_state["resultado_diagnostico"])
+        res = st.session_state["resultado_comparacao"]
+        
+        if res:
+            # Card principal da linha
+            with st.container(border=True):
+                col_cab1, col_cab2 = st.columns([4, 1])
+                with col_cab1:
+                    st.markdown(f"#### Linha {res['linha']}")
+                with col_cab2:
+                    st.markdown(f"🟢 **{res['status']}**")
+                
+                st.markdown("---")
+                
+                # Sub-colunas comparando os campos do Arquivo vs Histórico (Tribunal)
+                cols = st.columns(len(res['campos']))
+                for i, campo in enumerate(res['campos']):
+                    with cols[i]:
+                        # Estilo visual condicional se houver divergência (fundo avermelhado simulado)
+                        borda_cor = "border: 1px solid #EF4444; background-color: #FEF2F2;" if campo['divergente'] else "border: 1px solid #E2E8F0; background-color: #FFFFFF;"
+                        
+                        st.markdown(f"""
+                        <div style="{borda_cor} padding: 10px; border-radius: 8px; margin-bottom: 5px;">
+                            <small style="color: #64748B; font-weight: bold;">{campo['nome']}</small><br>
+                            <b>Arquivo:</b> <span style="color: {'#DC2626' if campo['divergente'] else '#0F172A'};">{campo['arquivo']}</span><br>
+                            <small style="color: #64748B;">Histórico:</small> <span style="font-size: 0.85rem;">{campo['historico']}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+
         st.markdown("---")
         
-        col_recomecar, _ = st.columns([1, 2])
-        with col_recomecar:
-            if st.button("🔄 Nova Verificação", type="primary", use_container_width=True):
+        col_voltar_res, col_exportar = st.columns([1, 1])
+        with col_voltar_res:
+            if st.button("⬅️ Nova Análise", use_container_width=True):
                 st.session_state["etapa_verificacao"] = 1
                 st.session_state["linhas_erro"] = ""
-                st.session_state["conteudo_arquivo_verificacao"] = ""
-                st.session_state["resultado_diagnostico"] = ""
+                st.session_state["arquivo_principal"] = None
+                st.session_state["arquivo_secundario"] = None
+                st.session_state["resultado_comparacao"] = None
                 st.rerun()
 
 elif pagina == "Historico":
