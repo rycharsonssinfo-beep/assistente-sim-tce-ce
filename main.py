@@ -4,7 +4,6 @@ from services.tce_api import TCEApiClient
 from storage.storage_service import StorageService
 from services.error_validation_service import ErrorValidationService
 import pandas as pd
-import io
 
 # Configuração inicial da página Streamlit
 st.set_page_config(
@@ -21,7 +20,7 @@ def main():
     st.title("📊 Plataforma Inteligente de Análise e Validação SIM/TCE-CE")
     st.markdown("Assistente modular para análise de divergências, validação de layouts do SIM e consultoria via Inteligência Artificial.")
 
-    # Menu lateral completo com todas as funcionalidades e IA
+    # Menu lateral completo
     st.sidebar.header("Navegação e Ferramentas")
     opcao = st.sidebar.selectbox(
         "Escolha a funcionalidade:",
@@ -73,11 +72,9 @@ def main():
         
         if uploaded_file is not None:
             try:
-                # Leitura dinâmica baseada no tipo de ficheiro
                 if uploaded_file.name.endswith('.csv'):
                     df_upload = pd.read_csv(uploaded_file)
                 else:
-                    # Tenta ler como delimitado ou texto estruturado
                     df_upload = pd.read_csv(uploaded_file, sep=None, engine='python')
                 
                 st.write("### Pré-visualização dos Dados Carregados:")
@@ -108,24 +105,21 @@ def main():
                     else:
                         st.success("Parabéns! Nenhum erro de campo obrigatório foi encontrado no ficheiro enviado.")
             except Exception as e:
-                st.error(f"Erro ao processar o ficheiro: {e}")
+                st.error(f"Ocorreu um erro ao processar o ficheiro: {e}")
 
     elif opcao == "Análise Inteligente por IA":
-        st.subheader("Assistente de Análise com Inteligência Artificial (Google Gemini)")
-        st.markdown("Insira a sua chave de API do Gemini e cole os dados ou mensagens de erro para que a IA ajude a diagnosticar as divergências do SIM/TCE-CE.")
+        st.subheader("Assistente de Análise com Inteligência Artificial")
+        st.markdown("Cole os dados, logs de erro ou descreva a divergência para que a IA analise automaticamente.")
         
-        api_key_input = st.text_input("Insira a sua Google Gemini API Key", type="password")
-        prompt_usuario = st.text_area("Descreva a divergência, cole o log de erro ou os dados para análise:")
+        prompt_usuario = st.text_area("Descreva a divergência ou cole os dados para análise:")
         
         if st.button("Analisar com IA"):
-            if not api_key_input:
-                st.warning("Por favor, insira a chave da API do Gemini.")
-            elif not prompt_usuario:
+            if not prompt_usuario:
                 st.warning("Por favor, escreva uma instrução ou cole os dados para a IA analisar.")
             else:
                 with st.spinner("A IA está a analisar o seu pedido..."):
                     try:
-                        genai.configure(api_key=api_key_input)
+                        # Utiliza a chave configurada de forma nativa/secreta na plataforma
                         model = genai.GenerativeModel('gemini-pro')
                         response = model.generate_content(
                             f"Você é um especialista técnico em auditoria de contas públicas, divergências do SIM e padrões do TCE-CE. Analise o seguinte contexto:\n\n{prompt_usuario}"
@@ -133,7 +127,7 @@ def main():
                         st.success("Análise Concluída:")
                         st.markdown(response.text)
                     except Exception as e:
-                        st.error(f"Erro ao comunicar com a API do Gemini: {e}")
+                        st.error(f"Erro ao comunicar com o serviço de IA. Verifique se a chave está configurada nos segredos do Streamlit: {e}")
 
 if __name__ == "__main__":
     main()
